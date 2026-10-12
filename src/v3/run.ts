@@ -527,6 +527,26 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     if (reassigned.length) emit({ event: "posts", data: { posts: reassigned, updated: true } });
     const finalPoll = snapshot(true);
     if (folded.length) finalPoll.other_breakdown = folded.sort((a, b) => b.count - a.count).slice(0, 8);
+    // KAN-422 follow-up: options added or refilled during refine missed the first profile pass; cover each final
+    // option's top 10 Reddit authors (usually a few dozen new handles, mostly cached), in parallel with the summaries.
+    const asked = new Set(leadHandles);
+    const lateHandles = [
+      ...new Set(
+        [...options.map((o) => o.id), OTHER_ID].flatMap((oid) =>
+          optionPosts(oid)
+            .filter((p) => p.source === "reddit" && p.author.handle !== "[deleted]")
+            .sort((a, b) => b.rank - a.rank)
+            .slice(0, 10)
+            .map((p) => p.author.handle),
+        ),
+      ),
+    ].filter((h) => !asked.has(h));
+    const lateProfileJob = lateHandles.length
+      ? fetchRedditProfiles(lateHandles, 2_500).then((profiles) => {
+          if (Object.keys(profiles).length) emit({ event: "authors", data: { source: "reddit", profiles } });
+        })
+      : Promise.resolve();
+    timing.late_profiles = lateHandles.length;
     // KAN-409: the final poll must equal what is listed; any drift is logged (and counted in done.count_issues).
     const pollIssues = countIssues(finalPoll, shown.values());
     if (pollIssues.length) log.warn("poll count mismatch", { query: req.query, issues: pollIssues.slice(0, 10) });
@@ -563,7 +583,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     await within(Promise.all([Promise.all(reasonJobs), themeJob]), budget + 500, undefined);
     timing.themes = themeCount;
     // Avatars and icons had since sort_done; give them at most 1s more after the summaries.
-    await within(Promise.all([profileJob, subJob]), 1_000, undefined);
+    await within(Promise.all([profileJob, subJob, lateProfileJob]), 1_000, undefined);
     mark("reasons_done");
 
     stage = "done";
