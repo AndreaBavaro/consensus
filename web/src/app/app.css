@@ -1120,6 +1120,69 @@ button.legend-row:hover,
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* "All opinions": the last legend row, set off by a hairline. */
+.legend-row.legend-all {
+  --c: var(--ink-2);
+  --ct: var(--hover);
+  position: relative;
+  margin-top: 5px;
+}
+.legend-row.legend-all::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: -4px;
+  border-top: 1px solid var(--line);
+}
+.legend-row.legend-all .dot {
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.legend-row.legend-all.pending .dot {
+  box-shadow: inset 0 0 0 2px var(--line-2);
+}
+.legend-total {
+  grid-column: 3 / -1;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.legend-row.legend-all.on .legend-total {
+  color: var(--ink);
+  font-weight: 600;
+}
+.opt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  max-width: 200px;
+  min-width: 0;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--c) 14%, var(--surface));
+  color: color-mix(in srgb, var(--c) 40%, var(--ink));
+}
+.opt-tag i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.opt-tag span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-theme='night'] .opt-tag {
+  background: color-mix(in srgb, var(--c) 16%, var(--surface));
+  color: color-mix(in srgb, var(--c) 70%, var(--ink));
+}
 .also-mentioned {
   margin: 8px 0 0;
   padding: 0 8px;
@@ -1494,8 +1557,15 @@ button.legend-row:hover,
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: auto;
+}
+.post-tags > * {
+  flex: none;
+}
+.post-tags > .opt-tag {
+  flex: 0 1 auto;
 }
 .intent {
   display: inline-flex;

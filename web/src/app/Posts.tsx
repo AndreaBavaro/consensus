@@ -118,12 +118,15 @@ export const PostRow = memo(function PostRow({
   lead,
   copied,
   onCopy,
+  tag,
 }: {
   post: Post;
   community?: Community;
   lead?: boolean;
   copied?: boolean;
   onCopy?: (p: Post) => void;
+  /** The answer this post counts toward, shown in the All opinions view. */
+  tag?: { title: string; color: string };
 }) {
   const [open, setOpen] = useState(false);
   const { title, body } = cleanText(post);
@@ -152,6 +155,12 @@ export const PostRow = memo(function PostRow({
         <div className="post-foot">
           <Engagement post={post} />
           <div className="post-tags">
+            {tag && (
+              <span className="opt-tag" style={{ ['--c' as string]: tag.color }} title={tag.title}>
+                <i />
+                <span>{tag.title}</span>
+              </span>
+            )}
             <IntentPill intent={post.intent} />
             {lead && (
               <>

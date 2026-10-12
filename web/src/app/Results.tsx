@@ -11,6 +11,8 @@ import { useMedia } from './useMedia';
 
 type Tab = 'all' | 'reddit' | 'x' | 'leads';
 type Sort = 'relevance' | 'score' | 'new';
+/** `picked` value for the "All opinions" view: every counted opinion, across options. */
+const ALL = '*';
 const SORT_LABEL: Record<Sort, string> = { relevance: 'Relevance', score: 'Most upvoted', new: 'Newest' };
 const STAGE_LABEL: Record<string, string> = {
   searching: 'Searching Reddit and X',
@@ -108,7 +110,7 @@ function SortMenu({ value, onChange }: { value: Sort; onChange: (s: Sort) => voi
   );
 }
 
-function Legend({ options, selected, onSelect, live, hovered, onHover }: { options: PollOption[]; selected: string | null; onSelect: (id: string) => void; live: boolean; hovered: string | null; onHover: (id: string | null) => void }) {
+function Legend({ options, selected, onSelect, live, hovered, onHover, total }: { options: PollOption[]; selected: string | null; onSelect: (id: string) => void; live: boolean; hovered: string | null; onHover: (id: string | null) => void; total: number }) {
   return (
     <div className="legend" role="listbox" aria-label="Answers">
       {options.map((o) => {
@@ -133,6 +135,11 @@ function Legend({ options, selected, onSelect, live, hovered, onHover }: { optio
           </button>
         );
       })}
+      <button type="button" role="option" aria-selected={!selected} className={`legend-row legend-all ${!selected ? 'on' : ''}`} onClick={() => onSelect(ALL)}>
+        <span className="dot" />
+        <span className="legend-title">All opinions</span>
+        <span className="legend-total">{num(total)}</span>
+      </button>
     </div>
   );
 }
@@ -174,24 +181,33 @@ function LegendPending({ titles }: { titles: string[] }) {
           <span className="legend-count" />
         </div>
       ))}
+      <div className="legend-row legend-all pending">
+        <span className="dot" />
+        <span className="legend-title">All opinions</span>
+        <span className="legend-total" />
+      </div>
     </div>
   );
 }
 
-/** Themes behind the selected answer: specific arguments, ranked by how many of its voters make them. */
-function Themes({ themes, option, posts, active, onPick }: { themes: Theme[]; option: PollOption | undefined; posts: Record<string, Post>; active: string | null; onPick: (id: string | null) => void }) {
-  if (!option) return null;
+/** Themes behind the selected answer (or every answer in All): specific arguments, ranked by how many voters make them. */
+function Themes({ themes, option, all, posts, active, onPick }: { themes: Theme[]; option: PollOption | undefined; all?: Set<string>; posts: Record<string, Post>; active: string | null; onPick: (id: string | null) => void }) {
+  if (!option && !all) return null;
+  const inScope = (id: string) => {
+    const o = posts[id]?.option;
+    return !!o && (option ? o === option.id : all!.has(o));
+  };
   // Counted from the loaded posts, the same set the list filters on, so a row's count always equals the list it opens.
   const rows = themes
-    .map((t) => ({ t, n: t.post_ids.reduce((a, id) => a + (posts[id]?.option === option.id ? 1 : 0), 0) }))
+    .map((t) => ({ t, n: t.post_ids.reduce((a, id) => a + (inScope(id) ? 1 : 0), 0) }))
     .filter((r) => r.n > 0)
     .sort((a, b) => b.n - a.n)
     .slice(0, 6);
   if (!rows.length) return null;
   const max = rows[0]!.n;
-  const c = optionColor(option.id);
+  const c = option ? optionColor(option.id) : 'var(--ink-2)';
   return (
-    <section className="themes" style={{ ['--c' as string]: c }} aria-label="What people are saying">
+    <section className={`themes ${option ? '' : 'all'}`} style={{ ['--c' as string]: c }} aria-label="What people are saying">
       <div className="why-label">What people are saying</div>
       <ul>
         {rows.map(({ t, n }) => (
@@ -331,8 +347,12 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
   const firstOrder = useRef<string[]>([]);
   if (!poll?.final) for (const o of rawOptions) if (!firstOrder.current.includes(o.id)) firstOrder.current.push(o.id);
   const options = poll?.final ? rawOptions : [...rawOptions].sort((a, b) => firstOrder.current.indexOf(a.id) - firstOrder.current.indexOf(b.id));
-  const selected = picked && options.some((o) => o.id === picked) ? picked : options.find((o) => o.count > 0)?.id ?? options[0]?.id ?? null;
+  // null = "All opinions". Before the user picks, the first answer with votes is shown.
+  const allView = picked === ALL;
+  const selected = allView ? null : picked && options.some((o) => o.id === picked) ? picked : options.find((o) => o.count > 0)?.id ?? options[0]?.id ?? null;
   const option = options.find((o) => o.id === selected);
+  const optionIds = useMemo(() => new Set(options.map((o) => o.id)), [options.map((o) => o.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inView = (p: Post) => (selected ? p.option === selected : !!p.option && optionIds.has(p.option));
   const legendBox = useNoShrink<HTMLDivElement>(picked);
   const whyBox = useNoShrink<HTMLDivElement>(picked);
   const leadsOn = showLeads(state);
@@ -354,16 +374,16 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
     let l: Post[];
     if (tab === 'leads') l = leads.filter((p) => !intent || p.intent === intent);
     else {
-      l = allPosts.filter((p) => p.option === selected && (!themeSet || themeSet.has(p.id)));
+      l = allPosts.filter((p) => inView(p) && (!themeSet || themeSet.has(p.id)));
       if (tab !== 'all') l = l.filter((p) => p.source === tab);
     }
     return l.sort(sorters[sort]);
-  }, [allPosts, leads, tab, intent, selected, sort, themeSet]);
+  }, [allPosts, leads, tab, intent, selected, optionIds, sort, themeSet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pageSize = tab === 'leads' && desktop ? 25 : 20;
   const pages = Math.max(1, Math.ceil(list.length / pageSize));
   const cur = running ? 1 : Math.min(page, pages);
-  const listKey = `${tab}-${selected}-${sort}-${intent}-${themeId}-${cur}`;
+  const listKey = `${tab}-${selected ?? ALL}-${sort}-${intent}-${themeId}-${cur}`;
   let shown = list.slice((cur - 1) * pageSize, cur * pageSize);
   if (running) {
     // While posts stream in, rows on screen stay put and new ones only append; the final order lands once at the end.
@@ -379,7 +399,8 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
     if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const select = (id: string) => {
-    setPicked(id);
+    // Clicking the answer already shown opens every opinion; clicking All (or an answer) narrows again.
+    setPicked(id !== ALL && id === selected ? ALL : id);
     setThemeId(null);
     setPage(1);
     if (tab === 'leads') setTab('all');
@@ -447,11 +468,13 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
   }
 
   // With a theme filter on, counts reflect the filtered posts so the tabs match the list.
-  const themed = themeSet ? allPosts.filter((p) => p.option === selected && themeSet.has(p.id)) : null;
-  const srcCount = (src: 'reddit' | 'x') => (themed ? themed.filter((p) => p.source === src).length : option ? option.by_source[src] : null);
+  const themed = themeSet ? allPosts.filter((p) => inView(p) && themeSet.has(p.id)) : null;
+  const allBySource = (src: 'reddit' | 'x') => options.reduce((a, o) => a + o.by_source[src], 0);
+  const allTotal = options.reduce((a, o) => a + o.count, 0);
+  const srcCount = (src: 'reddit' | 'x') => (themed ? themed.filter((p) => p.source === src).length : option ? option.by_source[src] : allView && poll ? allBySource(src) : null);
   // X is a logo, so it is never also spelled out ("X X 4"); its name lives in the tooltip and aria-label.
   const tabs: { id: Tab; label: React.ReactNode; name: string; count: number | null; icon?: React.ReactNode }[] = [
-    { id: 'all', label: 'All', name: 'All sources', count: themed ? themed.length : option ? option.count : null },
+    { id: 'all', label: 'All', name: 'All sources', count: themed ? themed.length : option ? option.count : allView && poll ? allTotal : null },
     { id: 'reddit', label: 'Reddit', name: 'Reddit', count: srcCount('reddit'), icon: <RedditMark size={15} /> },
     { id: 'x', label: null, name: 'X', count: srcCount('x'), icon: <XMark size={13} /> },
   ];
@@ -481,10 +504,10 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             )}
           </div>
           <div className="legend-box" ref={legendBox}>
-            {hasPoll ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
+            {hasPoll ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} total={allTotal} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
           </div>
         </div>
-        {!deferPosts && (
+        {!deferPosts && !allView && (
           <div ref={whyBox}>
             <Why option={hasPoll ? option : undefined} summary={hasPoll && selected ? state.reasons[selected]?.summary : undefined} pending={!hasPoll} />
           </div>
@@ -514,6 +537,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
           themes={state.done ? state.themes : []}
           posts={state.posts}
           option={poll && poll.total_opinions > 0 ? option : undefined}
+          all={allView && hasPoll ? optionIds : undefined}
           active={themeId}
           onPick={(id) => {
             setThemeId(id);
@@ -527,12 +551,18 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
       {deferPosts ? null : (
         <section className="posts-col" key="posts" ref={listTop}>
           <div className={`eyebrow posts-eyebrow ${theme ? 'crumbed' : ''}`}>
-            {tab === 'leads' ? 'Leads' : option ? (
+            {tab === 'leads' ? 'Leads' : option || (allView && hasPoll) ? (
               <>
-                <span className="eyebrow-pre">Posts saying</span>
-                <span style={{ color: optionColor(option.id) }} className="eyebrow-opt">
-                  {option.title}
-                </span>
+                {option ? (
+                  <>
+                    <span className="eyebrow-pre">Posts saying</span>
+                    <span style={{ color: optionColor(option.id) }} className="eyebrow-opt">
+                      {option.title}
+                    </span>
+                  </>
+                ) : (
+                  <span className="eyebrow-opt">All opinions</span>
+                )}
                 {theme && (
                   <>
                     <ChevronRight size={13} className="crumb-sep" aria-hidden="true" />
@@ -593,7 +623,20 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             ) : tab === 'leads' && desktop ? (
               <LeadsTable posts={shown} communities={state.communities} authors={state.authors} copied={copied} onCopy={onCopy} />
             ) : shown.length ? (
-              shown.map((p) => <PostRow key={p.id} post={p} community={p.community ? state.communities[p.community] : undefined} lead={tab === 'leads'} copied={copied === p.id} onCopy={onCopy} />)
+              shown.map((p) => {
+                const tag = allView && tab !== 'leads' ? options.find((o) => o.id === p.option) : undefined;
+                return (
+                  <PostRow
+                    key={p.id}
+                    post={p}
+                    community={p.community ? state.communities[p.community] : undefined}
+                    lead={tab === 'leads'}
+                    copied={copied === p.id}
+                    onCopy={onCopy}
+                    tag={tag ? { title: tag.title, color: optionColor(tag.id) } : undefined}
+                  />
+                );
+              })
             ) : (
               <p className="list-empty">No {tab === 'all' ? '' : tab === 'leads' ? 'leads' : tab === 'x' ? 'X ' : 'Reddit '}posts for this answer yet.</p>
             )}
