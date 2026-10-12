@@ -47,7 +47,7 @@ interface Tweet {
 }
 
 /** Why X pages ended without data (pace skip vs retries exhausted by kind), logged once per search. */
-type XFail = "skip" | "r429" | "r5xx" | "timeout" | "net" | "http4xx" | "retry429" | "retry5xx" | "retryTimeout" | "retryNet";
+type XFail = "skip" | "deferred" | "r429" | "r5xx" | "timeout" | "net" | "http4xx" | "retry429" | "retry5xx" | "retryTimeout" | "retryNet";
 const fails = new WeakMap<object, Partial<Record<XFail, number>>>();
 const bump = (k: XFail) => {
   const m = meter();
@@ -64,13 +64,79 @@ const bump = (k: XFail) => {
 const CUT_EVERY_MS = Number(process.env.X_CUT_EVERY_MS ?? 1_000);
 let lastCut = 0;
 
-async function xSearch(query: string, type: "Top" | "Latest", cursor: string, signal?: AbortSignal) {
+/*
+ * Per-search page queue (fair share under load). With N live searches each instance gets ~34/N req/s, and a search
+ * starts ~100 lanes at once. First-come pacing gave the first ~34 lanes every slot (and their deep pages) while the
+ * rest, including the plan wave's opinion lanes, were skipped and counted as failed (N=10: 53% of pages). Pages now
+ * wait in one queue per search and the next slot goes to the shallowest page, then the higher-yield lane kind; a
+ * page still queued after X_QUEUE_MS is deferred (not sent, not a failed call).
+ */
+const QUEUE_MS = Number(process.env.X_QUEUE_MS ?? 10_000);
+/** Queued pages may still go out this long after X_TIME_MS (deep pages already stop starting at X_TIME_MS). */
+const QUEUE_TAIL_MS = Number(process.env.X_QUEUE_TAIL_MS ?? 8_000);
+/** Opinions per page by lane kind on kb1: replies 2.3, opinion 1.5-1.9, pick 1.3, broad 0.7. */
+const KIND_RANK: Record<XLane["kind"], number> = { replies: 0, opinion: 0, pick: 0.5, convo: 0.5, popular: 1, broad: 1 };
+
+class PageQueue {
+  private q: { pri: number; seq: number; at: number; signal?: AbortSignal; go: (r: "go" | "deferred" | "skip") => void }[] = [];
+  private seq = 0;
+  private pumping = false;
+  deferred = 0;
+  /** No queued page is sent after this (epoch ms); set once the lane clock starts so waits cannot outlast the X budget. */
+  until = Infinity;
+
+  /** "go" when this page may be sent; "deferred" when it waited past X_QUEUE_MS (or the search ended); "skip" from pace(). */
+  take(pri: number, signal?: AbortSignal): Promise<"go" | "deferred" | "skip"> {
+    return new Promise((go) => {
+      this.q.push({ pri, seq: this.seq++, at: Date.now(), signal, go });
+      void this.pump();
+    });
+  }
+
+  private expire() {
+    const now = Date.now();
+    this.q = this.q.filter((r) => {
+      if (r.signal?.aborted) return r.go("deferred"), false;
+      if (now - r.at <= QUEUE_MS && now <= this.until) return true;
+      this.deferred++;
+      bump("deferred");
+      return r.go("deferred"), false;
+    });
+  }
+
+  private async pump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    try {
+      for (this.expire(); this.q.length; this.expire()) {
+        // Reserve the slot first, then pick: a page queued during the wait can still take it.
+        const ok = await pace();
+        this.expire();
+        if (!this.q.length) break;
+        let b = 0;
+        for (let i = 1; i < this.q.length; i++) {
+          const a = this.q[i]!, c = this.q[b]!;
+          if (a.pri < c.pri || (a.pri === c.pri && a.seq < c.seq)) b = i;
+        }
+        const r = this.q.splice(b, 1)[0]!;
+        r.go(ok ? "go" : "skip");
+      }
+    } finally {
+      this.pumping = false;
+    }
+  }
+}
+
+async function xSearch(query: string, type: "Top" | "Latest", cursor: string, signal?: AbortSignal, slot?: { queue: PageQueue; pri: number }) {
   const m = meter();
   let last: XFail = "retryNet";
   for (let attempt = 0; attempt < 5; attempt++) {
     if (signal?.aborted) return null;
-    // Global pacing (xpace.ts): under heavy load a page that would queue too long is skipped, not waited on.
-    if (!(await pace())) {
+    // Global pacing (xpace.ts) through the search's page queue. A deferred page was never sent, so it is not a failed
+    // call; a page pace() refuses (queue wait past X_MAX_WAIT_MS) still is.
+    const got = slot ? await slot.queue.take(slot.pri, signal) : (await pace()) ? "go" : "skip";
+    if (got === "deferred" || signal?.aborted) return null;
+    if (got === "skip") {
       if (m) m.xFailed++;
       bump("skip");
       return null;
@@ -482,6 +548,8 @@ async function collectXInner(
   };
   const inWindow = (p: RawPost) => !p.created_utc || (p.created_utc >= window.sinceEpoch && p.created_utc < window.untilEpoch);
   const dates = xDates(window);
+  const queue = new PageQueue();
+  const qs = (pri: number) => ({ queue, pri });
 
   /*
    * Conversation lane (sparse round 1): for niche subjects most answers are replies under one tweet that asks or ranks
@@ -493,7 +561,7 @@ async function collectXInner(
     let cursor = "";
     for (let page = 0; page < CONVO_PAGES && !signal?.aborted; page++) {
       if (overBudget() || elapsed() > X_TIME_MS + 2_000) break;
-      const data = await xSearch(`conversation_id:${seed.conversationId ?? seed.id} -filter:retweets${dates}`, "Latest", cursor, signal);
+      const data = await xSearch(`conversation_id:${seed.conversationId ?? seed.id} -filter:retweets${dates}`, "Latest", cursor, signal, qs(page + KIND_RANK.convo));
       const got = data?.tweets ?? [];
       raw += got.length;
       byKind.convo.raw += got.length;
@@ -519,7 +587,7 @@ async function collectXInner(
   const convoJobs: Promise<void>[] = [];
   const runSeed = async (sq: string) => {
     if (overBudget() || signal?.aborted) return;
-    const data = await xSearch(sq, "Top", "", signal);
+    const data = await xSearch(sq, "Top", "", signal, qs(0));
     // A seed must invite answers: a question, a ranking/take, or a big reply thread.
     const invites = (t: Tweet) => {
       const s = clean(t.text);
@@ -557,7 +625,7 @@ async function collectXInner(
       for (let page = 0; page < lane.pages && !signal?.aborted; page++) {
         if (overBudget()) { st.stop = "budget"; break; }
         if (page > 0 && elapsed() > X_TIME_MS) { st.stop = "time"; break; }
-        const data = await xSearch(lane.query, lane.type, cursor, signal);
+        const data = await xSearch(lane.query, lane.type, cursor, signal, qs(page + KIND_RANK[lane.kind]));
         const got = data?.tweets ?? [];
         st.pages++;
         st.raw += got.length;
@@ -615,7 +683,10 @@ async function collectXInner(
       kept += back.length;
       if (back.length && !signal?.aborted) onPosts(back);
     }
-    if (!laneClock && (w.lanes.length || w.seeds.length)) laneClock = Date.now();
+    if (!laneClock && (w.lanes.length || w.seeds.length)) {
+      laneClock = Date.now();
+      queue.until = laneClock + X_TIME_MS + QUEUE_TAIL_MS;
+    }
     for (const lane of w.lanes) {
       const key = `${lane.type}|${lane.query.toLowerCase()}`;
       if (queued.has(key)) continue;
