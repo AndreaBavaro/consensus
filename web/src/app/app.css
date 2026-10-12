@@ -1448,6 +1448,50 @@ button.legend-row:hover,
   place-items: center;
   overflow: hidden;
 }
+/* Reddit user avatars. Snoovatars are full-body PNGs, so they show head and shoulders like Reddit's own UI. */
+.post-icon.snoo {
+  display: block;
+  flex: none;
+  background: color-mix(in srgb, #ff4500 9%, var(--bg-2));
+}
+img.post-icon.snoo[src*='/snoovatar/'] {
+  object-fit: cover;
+  object-position: 50% 8%;
+}
+.post-icon.snoo.fallback {
+  display: grid;
+  color: #ff4500;
+}
+.post-icon.snoo .snoo-fb {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.by-sub.sub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1000 auto;
+  min-width: 0;
+}
+.sub-tag .sub-ic {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  color: #fff;
+}
+.sub-tag .sub-ic.fallback {
+  display: grid;
+  place-items: center;
+}
+.sub-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .letter {
   font: 700 16px/1 var(--sans);
   color: var(--ink-2);

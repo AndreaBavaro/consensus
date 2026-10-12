@@ -15,7 +15,7 @@ export function useCopy(): [string | null, (key: string, text: string) => void] 
   return [copied, copy];
 }
 
-function Img({ src, className, fallback, bg }: { src: string | null | undefined; className: string; fallback: React.ReactNode; bg?: string | null }) {
+function Img({ src, className, fallback, bg, lazy }: { src: string | null | undefined; className: string; fallback: React.ReactNode; bg?: string | null; lazy?: boolean }) {
   const [bad, setBad] = useState(false);
   const style = bg ? { background: bg } : undefined;
   if (!src || bad)
@@ -24,7 +24,7 @@ function Img({ src, className, fallback, bg }: { src: string | null | undefined;
         {fallback}
       </span>
     );
-  return <img className={className} src={src} alt="" decoding="async" referrerPolicy="no-referrer" onError={() => setBad(true)} style={style} />;
+  return <img className={className} src={src} alt="" decoding="async" loading={lazy ? 'lazy' : undefined} referrerPolicy="no-referrer" onError={() => setBad(true)} style={style} />;
 }
 
 function Letter({ name, color }: { name: string; color?: string | null }) {
@@ -36,15 +36,41 @@ function Letter({ name, color }: { name: string; color?: string | null }) {
   );
 }
 
-/** Reddit rows show the community icon (Reddit has no useful profile photos); X rows show the author photo. */
-export function PostIcon({ post, community }: { post: Post; community?: Community }) {
+/** Reddit's default Snoo for a user, picked by the same name hash the backend uses so a user's fallback never changes. */
+function defaultSnoo(handle: string): string {
+  let h = 0;
+  for (const c of handle.toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `https://www.redditstatic.com/avatars/defaults/v2/avatar_default_${h % 8}.png`;
+}
+
+const deletedUser = (h: string) => !h || h === '[deleted]' || h === '[removed]';
+
+/** Reddit rows show the commenter's snoovatar (or their default Snoo); X rows show the author photo. */
+export function PostIcon({ post, author }: { post: Post; author?: AuthorProfile }) {
   if (post.source === 'reddit') {
-    // Many community icons are transparent PNGs; the community color keeps them visible on any theme.
-    const color = community?.color ?? null;
-    const fb = post.community ? <Letter name={post.community} color={color ?? '#FF4500'} /> : <RedditMark size={34} />;
-    return <Img src={community?.icon} className="post-icon ring" bg={color ?? (post.community ? '#FF4500' : null)} fallback={fb} />;
+    const h = post.author.handle;
+    if (deletedUser(h))
+      return (
+        <span className="post-icon snoo fallback">
+          <RedditMark size={22} />
+        </span>
+      );
+    const snoo = defaultSnoo(h);
+    const src = author?.avatar || post.author.avatar || snoo;
+    // Keyed by src so a late real avatar swaps in; a broken one falls back to the default Snoo.
+    return <Img key={src} src={src} className="post-icon snoo" lazy fallback={src === snoo ? <RedditMark size={22} /> : <img className="snoo-fb" src={snoo} alt="" loading="lazy" referrerPolicy="no-referrer" />} />;
   }
   return <Img src={post.author.avatar} className="post-icon" fallback={<Letter name={post.author.name || post.author.handle} />} />;
+}
+
+/** The subreddit as a small tag next to the author: tiny community icon (or the Reddit mark) plus its name. */
+function SubTag({ name, community }: { name: string; community?: Community }) {
+  return (
+    <span className="by-sub sub-tag" title={name}>
+      <Img src={community?.icon} className="sub-ic" lazy bg={community?.color ?? '#FF4500'} fallback={<RedditMark size={12} />} />
+      <span className="sub-name">{name}</span>
+    </span>
+  );
 }
 
 export function IntentPill({ intent }: { intent: Intent | null }) {
@@ -57,16 +83,18 @@ export function IntentPill({ intent }: { intent: Intent | null }) {
   );
 }
 
-function Byline({ post }: { post: Post }) {
+function Byline({ post, community }: { post: Post; community?: Community }) {
   const age = timeAgo(post.created_at);
-  if (post.source === 'reddit')
+  if (post.source === 'reddit') {
+    const h = post.author.handle;
     return (
       <div className="byline">
-        <strong className="by-main">{post.community ?? 'Reddit'}</strong>
-        <span className="by-sub by-handle">u/{post.author.handle}</span>
+        <strong className="by-main">{deletedUser(h) ? '[deleted]' : `u/${h}`}</strong>
+        {post.community && <SubTag name={post.community} community={community} />}
         {age && <span className="by-sub by-age">{age}</span>}
       </div>
     );
+  }
   return (
     <div className="byline">
       <strong className="by-main">{post.author.name || `@${post.author.handle}`}</strong>
@@ -115,6 +143,7 @@ function cleanText(post: Post) {
 export const PostRow = memo(function PostRow({
   post,
   community,
+  author,
   lead,
   copied,
   onCopy,
@@ -122,6 +151,7 @@ export const PostRow = memo(function PostRow({
 }: {
   post: Post;
   community?: Community;
+  author?: AuthorProfile;
   lead?: boolean;
   copied?: boolean;
   onCopy?: (p: Post) => void;
@@ -134,10 +164,10 @@ export const PostRow = memo(function PostRow({
   const long = (title?.length ?? 0) + flat.length > 260;
   return (
     <article className="post">
-      <PostIcon post={post} community={community} />
+      <PostIcon post={post} author={author} />
       <div className="post-main">
         <div className="post-top">
-          <Byline post={post} />
+          <Byline post={post} community={community} />
           <a className="post-src" href={post.url} target="_blank" rel="noreferrer" data-tip={post.source === 'reddit' ? 'Open on Reddit' : 'Open on X'} aria-label="Open original">
             {post.source === 'reddit' ? <RedditMark size={16} /> : <XMark size={13} />}
             <ArrowUpRight size={15} className="post-ext" />
@@ -209,14 +239,14 @@ export function LeadsTable({
         return (
           <div className="lt-row" role="row" key={p.id}>
             <span className="lt-src">
-              <PostIcon post={p} community={p.community ? communities[p.community] : undefined} />
+              <PostIcon post={p} author={p.source === 'reddit' ? authors[p.author.handle] : undefined} />
             </span>
             <span className="lt-author">
               <a href={p.author.profile_url ?? p.url} target="_blank" rel="noreferrer">
-                <strong>{p.source === 'reddit' ? p.community : p.author.name || `@${p.author.handle}`}</strong>
+                <strong>{p.source === 'reddit' ? `u/${p.author.handle}` : p.author.name || `@${p.author.handle}`}</strong>
               </a>
               <span>
-                {p.source === 'reddit' ? `u/${p.author.handle}` : `@${p.author.handle}`}
+                {p.source === 'reddit' ? p.community ?? 'Reddit' : `@${p.author.handle}`}
                 {p.source === 'x' && p.author.followers ? ` · ${compact(p.author.followers)}` : ''}
                 {karma ? ` · ${compact(karma)} karma` : ''}
               </span>

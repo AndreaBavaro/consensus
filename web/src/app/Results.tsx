@@ -630,6 +630,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
                     key={p.id}
                     post={p}
                     community={p.community ? state.communities[p.community] : undefined}
+                    author={p.source === 'reddit' ? state.authors[p.author.handle] : undefined}
                     lead={tab === 'leads'}
                     copied={copied === p.id}
                     onCopy={onCopy}
