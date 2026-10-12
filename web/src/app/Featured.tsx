@@ -53,13 +53,20 @@ function spread(polls: FeaturedPoll[]): FeaturedPoll[] {
 // q carries the clean title: shown as the heading and used for a live re-run if the saved result is gone.
 const href = (p: FeaturedPoll) => `/search?id=${encodeURIComponent(p.id)}&q=${encodeURIComponent(p.title)}`;
 const colorOf = (o: { id: string; is_other: boolean }) => optionColor(o.is_other ? 'other' : o.id);
+// A second click on a card just after the first would push the same search onto history again.
+let lastOpen = 0;
+const once = (e: React.MouseEvent) => {
+  if (Date.now() - lastOpen < 1000) e.preventDefault();
+  else lastOpen = Date.now();
+};
+
 const pct = (v: number) => (v < 1 ? '<1' : String(Math.round(v)));
 
 function Row({ p }: { p: FeaturedPoll }) {
   const lead = p.options.find((o) => !o.is_other) ?? p.options[0]!;
   return (
     <li>
-      <Link to={href(p)} className="ex" onPointerEnter={() => prefetchSaved(p.id)} onTouchStart={() => prefetchSaved(p.id)} onFocus={() => prefetchSaved(p.id)}>
+      <Link to={href(p)} className="ex" onClick={once} onPointerEnter={() => prefetchSaved(p.id)} onTouchStart={() => prefetchSaved(p.id)} onFocus={() => prefetchSaved(p.id)}>
         <span className="ex-title">{p.title}</span>
         <span className="ex-bar" aria-hidden="true">
           {p.options

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2, Search, SlidersHorizontal } from 'lucide-react';
 import { RANGE_LABEL, RANGE_PRESETS, shortDate, today, ymd, type RangeKey } from './format';
 import { RedditMark, XMark } from './icons';
 import type { V3Source } from './api';
@@ -36,7 +36,7 @@ export function parseSearch(p: URLSearchParams): SearchInput {
   };
 }
 
-function Toggle({ on, onChange, label, locked, children }: { on: boolean; onChange: (v: boolean) => void; label: string; locked?: boolean; children: React.ReactNode }) {
+function Toggle({ on, onChange, label, locked, disabled, children }: { on: boolean; onChange: (v: boolean) => void; label: string; locked?: boolean; disabled?: boolean; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -44,9 +44,10 @@ function Toggle({ on, onChange, label, locked, children }: { on: boolean; onChan
       aria-checked={on}
       aria-label={label}
       aria-disabled={locked || undefined}
+      disabled={disabled}
       className={`src-toggle ${on ? 'on' : ''} ${locked ? 'locked' : ''}`}
       onClick={() => !locked && onChange(!on)}
-      data-tip={locked ? 'At least one source' : `${on ? 'Hide' : 'Include'} ${label}`}
+      data-tip={disabled ? undefined : locked ? 'At least one source' : `${on ? 'Hide' : 'Include'} ${label}`}
     >
       {children}
       <span className="switch" aria-hidden="true">
@@ -173,13 +174,13 @@ function RangeOptions({ value, since, until, onChange }: { value: RangeKey; sinc
 const rangeLabel = (value: RangeKey, since?: string, until?: string) =>
   value === 'custom' && since ? `${shortDate(since)} – ${until ? shortDate(until) : 'now'}` : RANGE_LABEL[value];
 
-export function RangeMenu({ value, since, until, onChange }: { value: RangeKey; since?: string; until?: string; onChange: (r: RangeKey, since?: string, until?: string) => void }) {
+export function RangeMenu({ value, since, until, onChange, disabled }: { value: RangeKey; since?: string; until?: string; onChange: (r: RangeKey, since?: string, until?: string) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useDismiss(open, close);
   return (
     <div className="menu-wrap" ref={ref}>
-      <button type="button" className="chip-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} data-tip={open ? undefined : 'Date range'}>
+      <button type="button" className="chip-btn" disabled={disabled} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} data-tip={open || disabled ? undefined : 'Date range'}>
         <CalendarDays size={15} />
         <span className="chip-label">{rangeLabel(value, since, until)}</span>
         <ChevronDown size={14} className="chev" />
@@ -202,14 +203,14 @@ export function RangeMenu({ value, since, until, onChange }: { value: RangeKey; 
 }
 
 /** Phones: date range and sources behind one button so the search field keeps its width. */
-function FiltersMenu({ s, change }: { s: SearchInput; change: (patch: Partial<SearchInput>) => void }) {
+function FiltersMenu({ s, change, disabled }: { s: SearchInput; change: (patch: Partial<SearchInput>) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useDismiss(open, close);
   const custom = s.range !== 'any' || s.sources.length < 2;
   return (
     <div className="menu-wrap" ref={ref}>
-      <button type="button" className={`chip-btn filters-btn ${custom ? 'active' : ''}`} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Filters">
+      <button type="button" className={`chip-btn filters-btn ${custom ? 'active' : ''}`} disabled={disabled} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Filters">
         <SlidersHorizontal size={16} />
       </button>
       {open && (
@@ -233,28 +234,29 @@ function FiltersMenu({ s, change }: { s: SearchInput; change: (patch: Partial<Se
   );
 }
 
-export function SourceToggles({ sources, onChange }: { sources: V3Source[]; onChange: (s: V3Source[]) => void }) {
+export function SourceToggles({ sources, onChange, disabled }: { sources: V3Source[]; onChange: (s: V3Source[]) => void; disabled?: boolean }) {
   const set = (src: V3Source, on: boolean) => {
     const next = on ? [...new Set([...sources, src])] : sources.filter((s) => s !== src);
     if (next.length) onChange((['reddit', 'x'] as V3Source[]).filter((s) => next.includes(s)));
   };
   return (
     <div className="src-toggles">
-      <Toggle on={sources.includes('reddit')} locked={sources.length === 1 && sources[0] === 'reddit'} onChange={(v) => set('reddit', v)} label="Reddit">
+      <Toggle on={sources.includes('reddit')} disabled={disabled} locked={sources.length === 1 && sources[0] === 'reddit'} onChange={(v) => set('reddit', v)} label="Reddit">
         <RedditMark size={17} />
         <span className="src-name">Reddit</span>
       </Toggle>
-      <Toggle on={sources.includes('x')} locked={sources.length === 1 && sources[0] === 'x'} onChange={(v) => set('x', v)} label="X">
+      <Toggle on={sources.includes('x')} disabled={disabled} locked={sources.length === 1 && sources[0] === 'x'} onChange={(v) => set('x', v)} label="X">
         <XMark size={14} />
       </Toggle>
     </div>
   );
 }
 
-export function SearchBar({ initial, onSubmit, variant, autoFocus }: { initial: SearchInput; onSubmit: (s: SearchInput) => void; variant: 'hero' | 'header'; autoFocus?: boolean }) {
+export function SearchBar({ initial, onSubmit, variant, autoFocus, busy }: { initial: SearchInput; onSubmit: (s: SearchInput) => void; variant: 'hero' | 'header'; autoFocus?: boolean; busy?: boolean }) {
   const [s, setS] = useState<SearchInput>(initial);
   const narrow = useMedia('(max-width: 600px)');
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastSubmit = useRef(0);
   useEffect(() => setS(initial), [initial.q, initial.range, initial.since, initial.until, initial.sources.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -262,20 +264,26 @@ export function SearchBar({ initial, onSubmit, variant, autoFocus }: { initial: 
 
   const submit = (e?: FormEvent, next = s) => {
     e?.preventDefault();
-    if (next.q.trim()) onSubmit({ ...next, q: next.q.trim() });
+    // One search at a time: ignore submits while one runs, and repeat Enter/clicks right after a submit.
+    if (busy || Date.now() - lastSubmit.current < 1000) return;
+    if (next.q.trim()) {
+      lastSubmit.current = Date.now();
+      onSubmit({ ...next, q: next.q.trim() });
+    }
     else inputRef.current?.focus();
   };
   // In the header, changing a filter re-runs the current question at once.
   const change = (patch: Partial<SearchInput>) => {
+    if (busy) return;
     const next = { ...s, ...patch };
     setS(next);
     if (variant === 'header' && next.q.trim()) submit(undefined, next);
   };
 
   return (
-    <form className={`searchbar ${variant}`} onSubmit={submit} role="search">
+    <form className={`searchbar ${variant} ${busy ? 'busy' : ''}`} onSubmit={submit} role="search" aria-busy={busy || undefined}>
       <label className="search-field">
-        <Search size={variant === 'hero' ? 20 : 16} className="search-icon" />
+        {busy ? <Loader2 size={variant === 'hero' ? 20 : 16} className="search-icon spin" /> : <Search size={variant === 'hero' ? 20 : 16} className="search-icon" />}
         <input
           ref={inputRef}
           value={s.q}
@@ -286,18 +294,18 @@ export function SearchBar({ initial, onSubmit, variant, autoFocus }: { initial: 
           enterKeyHint="search"
         />
         {variant === 'hero' && (
-          <button className="go-btn" type="submit" aria-label="Search" data-tip="Search" disabled={!s.q.trim()}>
+          <button className="go-btn" type="submit" aria-label="Search" data-tip="Search" disabled={busy || !s.q.trim()}>
             <ArrowRight size={20} />
           </button>
         )}
       </label>
       <div className="search-filters">
         {variant === 'header' && narrow ? (
-          <FiltersMenu s={s} change={change} />
+          <FiltersMenu s={s} change={change} disabled={busy} />
         ) : (
           <>
-            <RangeMenu value={s.range} since={s.since} until={s.until} onChange={(range, since, until) => change({ range, since, until })} />
-            <SourceToggles sources={s.sources} onChange={(sources) => change({ sources })} />
+            <RangeMenu value={s.range} since={s.since} until={s.until} disabled={busy} onChange={(range, since, until) => change({ range, since, until })} />
+            <SourceToggles sources={s.sources} disabled={busy} onChange={(sources) => change({ sources })} />
           </>
         )}
       </div>

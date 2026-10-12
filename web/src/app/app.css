@@ -2071,6 +2071,22 @@ img.post-icon.snoo[src*='/snoovatar/'] {
 .src-toggle.locked {
   cursor: not-allowed;
 }
+/* While a search runs the filters wait; the question field stays editable. */
+.searchbar .chip-btn:disabled,
+.searchbar .src-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.searchbar .chip-btn:disabled:hover {
+  border-color: var(--line-2);
+}
+.state-panel.calm > svg {
+  color: var(--muted);
+}
+.history-item a[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
 
 /* Phone filters menu */
 .filters-btn {

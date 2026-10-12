@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError, streamSearch, type AuthorProfile, type Community, type Done, type Meta, type PlanOption, type Poll, type Post, type Progress, type Reason, type SearchParams, type Theme } from './api';
 
 export type Phase = 'connecting' | 'streaming' | 'done' | 'error' | 'gated';
@@ -105,15 +105,34 @@ function reducer(s: SearchState, a: Action): SearchState {
   }
 }
 
+// Whether a search is streaming right now, for controls outside the results page (recent searches).
+let live = false;
+const liveSubs = new Set<() => void>();
+const setLive = (v: boolean) => {
+  if (live === v) return;
+  live = v;
+  liveSubs.forEach((f) => f());
+};
+export const useSearchRunning = () =>
+  useSyncExternalStore(
+    (f) => (liveSubs.add(f), () => void liveSubs.delete(f)),
+    () => live,
+  );
+
 /** Streams one search. Events are batched per animation frame so thousands of posts never block the UI. */
 export function useSearch(params: SearchParams | null) {
   const [attempt, setAttempt] = useState(0);
   const [state, dispatch] = useReducer(reducer, initial);
   const key = params ? JSON.stringify(params) : '';
+  const quietRetry = useRef(false);
+  const busyTries = useRef(0);
 
   useEffect(() => {
     if (!params) return;
-    dispatch({ type: 'reset' });
+    // A quiet retry keeps the "one search at a time" panel up until the new stream actually starts.
+    let pendingReset = quietRetry.current;
+    quietRetry.current = false;
+    if (!pendingReset) dispatch({ type: 'reset' });
     const ac = new AbortController();
     let queue: { event: string; data: any }[] = [];
     let raf = 0;
@@ -121,7 +140,10 @@ export function useSearch(params: SearchParams | null) {
       raf = 0;
       const q = queue;
       queue = [];
-      if (q.length) dispatch({ type: 'events', events: q });
+      if (!q.length) return;
+      if (pendingReset) dispatch({ type: 'reset' });
+      pendingReset = false;
+      dispatch({ type: 'events', events: q });
     };
     streamSearch(
       params,
@@ -150,6 +172,27 @@ export function useSearch(params: SearchParams | null) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, attempt]);
+
+  const running = !!params && (state.phase === 'connecting' || state.phase === 'streaming');
+  useEffect(() => {
+    setLive(running);
+    return () => setLive(false);
+  }, [running]);
+
+  // 409: another search of ours holds the slot (often the one just cancelled, released a beat later). Retry quietly a few times.
+  useEffect(() => {
+    busyTries.current = 0;
+  }, [key]);
+  useEffect(() => {
+    if (state.phase !== 'error' || state.error?.code !== 'search_in_progress' || busyTries.current >= 6) return;
+    const t = setTimeout(() => {
+      busyTries.current++;
+      quietRetry.current = true;
+      setAttempt((a) => a + 1);
+    }, 1500 + busyTries.current * 1000);
+    return () => clearTimeout(t);
+    // Keyed on the error object: it changes only when a new 409 lands, never while a retry is in flight.
+  }, [state.phase, state.error]);
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
   return { state, retry };

@@ -15,6 +15,7 @@ import {
 } from '../lib/consensusAuth';
 import { timeAgo } from './format';
 import { ThemeSwatches } from './theme';
+import { useSearchRunning } from './useSearch';
 
 interface AuthCtx {
   user: ConsensusUser | null;
@@ -101,6 +102,8 @@ export function GoogleButton({ onDone, label = 'Continue with Google', className
 }
 
 function RecentSearches({ onPick }: { onPick: () => void }) {
+  // Opening another search mid-run would cancel the one in flight.
+  const running = useSearchRunning();
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   useEffect(() => {
     let live = true;
@@ -126,7 +129,11 @@ function RecentSearches({ onPick }: { onPick: () => void }) {
         ) : (
           history.slice(0, 15).map((h) => (
             <div className="history-item" key={h.id}>
-              <Link to={`/search?id=${encodeURIComponent(h.id)}&q=${encodeURIComponent(h.query)}`} onClick={onPick}>
+              <Link
+                to={`/search?id=${encodeURIComponent(h.id)}&q=${encodeURIComponent(h.query)}`}
+                aria-disabled={running || undefined}
+                onClick={(e) => (running ? e.preventDefault() : onPick())}
+              >
                 <span>{h.query}</span>
                 <small>{timeAgo(h.at)}</small>
               </Link>

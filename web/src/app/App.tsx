@@ -236,7 +236,7 @@ function SearchPage() {
       <header className="topbar">
         <div className="topbar-in">
           <Wordmark />
-          <SearchBar variant="header" initial={barInitial} onSubmit={(s) => nav(searchHref(s))} />
+          <SearchBar variant="header" initial={barInitial} busy={state.phase === 'connecting' || state.phase === 'streaming'} onSubmit={(s) => nav(searchHref(s))} />
           <span className="top-actions">
             <MockBadge />
             <AccountDock />

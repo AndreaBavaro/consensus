@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Lock, RotateCw, SearchX, Users, X as XIcon } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, Hourglass, Check, ChevronDown, ChevronLeft, ChevronRight, Lock, RotateCw, SearchX, Users, X as XIcon } from 'lucide-react';
 import type { Intent, Post, PollOption, Theme } from './api';
 import { GoogleButton, useAuth } from './auth';
 import { Donut, DonutSkeleton } from './Donut';
@@ -408,6 +408,18 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
   const onCopy = (p: Post) => copy(p.id, p.url);
 
   const title = headline(query || state.meta?.query || "");
+
+  if (state.phase === 'error' && state.error?.code === 'search_in_progress')
+    return (
+      <div className="state-panel calm">
+        <Hourglass size={26} />
+        <h2>One search at a time</h2>
+        <p>{state.error.message}</p>
+        <button className="btn primary" onClick={retry}>
+          <RotateCw size={15} /> Try again
+        </button>
+      </div>
+    );
 
   if (state.phase === 'error')
     return (
