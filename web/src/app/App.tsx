@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, Copy, Download, Link2, MessageCircle, Share, X as Close } from 'lucide-react';
+import { Check, Download, Link2, MessageCircle, MoreHorizontal, Share } from 'lucide-react';
 import { faLinkedin, faXTwitter } from '@fortawesome/free-brands-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { apiMode, type SearchParams } from './api';
@@ -10,6 +11,7 @@ import { LogoMark } from './icons';
 import { FeaturedFeed } from './Featured';
 import { Results } from './Results';
 import { SponsorStrip } from './Sponsor';
+import { useMedia } from './useMedia';
 import { parseSearch, SearchBar, searchHref, type SearchInput } from './SearchBar';
 import { ThemeProvider } from './theme';
 import { useSearch, type SearchState } from './useSearch';
@@ -68,15 +70,37 @@ function exportCsv(state: SearchState) {
   download(`${slug(state.meta?.query ?? 'consensus')}.csv`, toCsv(rows));
 }
 
-function SharePanel({ id, state, onClose }: { id: string; state: SearchState; onClose: () => void }) {
+function SharePanel({ id, state, onClose, anchor }: { id: string; state: SearchState; onClose: () => void; anchor: React.RefObject<HTMLDivElement> }) {
   const url = `${location.origin}/search?id=${encodeURIComponent(id)}${state.meta?.query ? `&q=${encodeURIComponent(state.meta.query)}` : ''}`;
   const title = headline(state.meta?.query ?? '');
   const [copied, setCopied] = useState(false);
   const t = useRef<ReturnType<typeof setTimeout>>();
   const ref = useRef<HTMLDivElement>(null);
+  // Two columns: float beside the question tools, over the empty top of the posts column, so the title and donut stay visible.
+  // One column: a bottom sheet.
+  const side = useMedia('(min-width: 1100px)');
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!side) return setPos(null);
+    const place = () => {
+      const tools = anchor.current?.closest('.q-tools') ?? anchor.current;
+      const r = tools?.getBoundingClientRect();
+      if (r) setPos({ top: Math.max(8, r.top - 4), left: Math.min(r.right + 16, window.innerWidth - 300) });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [side, anchor]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    const down = (e: MouseEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
+    const down = (e: MouseEvent) => {
+      const n = e.target as Node;
+      if (!ref.current?.contains(n) && !anchor.current?.contains(n)) onClose();
+    };
     document.addEventListener('keydown', key);
     document.addEventListener('mousedown', down);
     return () => {
@@ -84,12 +108,12 @@ function SharePanel({ id, state, onClose }: { id: string; state: SearchState; on
       document.removeEventListener('mousedown', down);
       clearTimeout(t.current);
     };
-  }, [onClose]);
+  }, [onClose, anchor]);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url);
     } catch {
-      /* clipboard blocked; the field is still selectable */
+      /* clipboard blocked */
     }
     setCopied(true);
     clearTimeout(t.current);
@@ -97,36 +121,12 @@ function SharePanel({ id, state, onClose }: { id: string; state: SearchState; on
   };
   const text = `What people think: ${title}`;
   const opts = (state.poll?.options ?? []).filter((o) => o.count > 0);
-  return (
-    <div className="share-pop" role="dialog" aria-label="Share this poll" ref={ref}>
-      <div className="share-head">
-        <strong>Share this poll</strong>
-        <button className="icon-btn" onClick={onClose} aria-label="Close" data-tip="Close">
-          <Close size={15} />
-        </button>
-      </div>
-      <div className="share-link">
-        <Link2 size={14} className="share-link-ic" />
-        <input readOnly value={url.replace(/^https?:\/\//, '')} onFocus={(e) => e.currentTarget.select()} aria-label="Public link" />
-        <button className="btn primary share-copy" onClick={copy}>
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? 'Copied' : 'Copy link'}
-        </button>
-      </div>
-      <div className="share-row">
-        <span className="muted">Anyone with the link can see it</span>
-        <span className="share-nets">
-          <a className="icon-btn" href={`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on X" data-tip="Post on X">
-            <FontAwesomeIcon icon={faXTwitter} style={{ width: 15, height: 15 }} />
-          </a>
-          <a className="icon-btn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn" data-tip="LinkedIn">
-            <FontAwesomeIcon icon={faLinkedin} style={{ width: 16, height: 16, color: '#0A66C2' }} />
-          </a>
-          <a className="icon-btn" href={`sms:&body=${encodeURIComponent(`${text} ${url}`)}`} aria-label="Send as a text message" data-tip="Message">
-            <MessageCircle size={16} style={{ color: '#34C759' }} />
-          </a>
-        </span>
-      </div>
+  const native = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const more = () => void navigator.share?.({ title: text, url }).catch(() => {});
+  if (side && !pos) return null;
+  const panel = (
+    <div className={`share-pop ${side ? 'side' : 'sheet'}`} role="dialog" aria-label="Share this poll" ref={ref} style={side && pos ? { top: pos.top, left: pos.left } : undefined}>
+      {!side && <span className="share-grab" aria-hidden="true" />}
       <div className="share-card" aria-hidden="true">
         <span className="share-card-brand">
           <LogoMark size={14} /> Consensus
@@ -139,20 +139,54 @@ function SharePanel({ id, state, onClose }: { id: string; state: SearchState; on
         </span>
         <span className="share-card-foot">{num(state.poll?.total_opinions ?? 0)} opinions · useconsensus.io</span>
       </div>
+      <div className="share-row">
+        <button className={`btn primary share-copy ${copied ? 'done' : ''}`} onClick={copy} aria-live="polite">
+          {copied ? <Check size={15} /> : <Link2 size={15} />}
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+        <span className="share-nets">
+          <a className="icon-btn" href={`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on X" data-tip="Post on X">
+            <FontAwesomeIcon icon={faXTwitter} style={{ width: 15, height: 15 }} />
+          </a>
+          <a className="icon-btn" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn" data-tip="LinkedIn">
+            <FontAwesomeIcon icon={faLinkedin} style={{ width: 16, height: 16, color: '#0A66C2' }} />
+          </a>
+          <a className="icon-btn" href={`sms:&body=${encodeURIComponent(`${text} ${url}`)}`} aria-label="Send as a text message" data-tip="Message">
+            <MessageCircle size={16} style={{ color: '#34C759' }} />
+          </a>
+          {native && (
+            <button type="button" className="icon-btn" onClick={more} aria-label="More ways to share" data-tip="More">
+              <MoreHorizontal size={17} />
+            </button>
+          )}
+        </span>
+      </div>
     </div>
+  );
+  return createPortal(
+    side ? (
+      panel
+    ) : (
+      <>
+        <div className="share-scrim" onClick={onClose} aria-hidden="true" />
+        {panel}
+      </>
+    ),
+    document.body,
   );
 }
 
 function ShareButton({ id, state }: { id: string | undefined; state: SearchState }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
+  const anchor = useRef<HTMLDivElement>(null);
   return (
-    <div className="share-wrap">
+    <div className="share-wrap" ref={anchor}>
       <button className={`chip-btn share-btn ${open ? 'on' : ''}`} onClick={() => setOpen((o) => !o)} disabled={!id} aria-haspopup="dialog" aria-expanded={open}>
         <Share size={14} />
         <span>Share</span>
       </button>
-      {open && id && <SharePanel id={id} state={state} onClose={close} />}
+      {open && id && <SharePanel id={id} state={state} onClose={close} anchor={anchor} />}
     </div>
   );
 }
