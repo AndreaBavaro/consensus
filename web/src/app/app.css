@@ -98,6 +98,7 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
 }
 body {
   margin: 0;
@@ -872,13 +873,15 @@ img {
   align-self: start;
   max-height: calc(100vh - 64px - var(--sp));
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: none;
 }
 .poll-col::-webkit-scrollbar {
   display: none;
 }
+/* Top padding centers the 22px posts eyebrow on the poll column's 34px question row, so both eyebrows share a line. */
 .posts-col {
-  padding: 22px 32px 40px 40px;
+  padding: 36px 32px 40px 40px;
   min-width: 0;
   scroll-margin-top: calc(72px + var(--sp));
 }
@@ -1184,8 +1187,8 @@ button.legend-row:hover,
   color: color-mix(in srgb, var(--c) 70%, var(--ink));
 }
 .also-mentioned {
-  margin: 8px 0 0;
-  padding: 0 8px;
+  margin: 10px 0 0;
+  padding: 0;
   font-size: 12.5px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -1223,7 +1226,7 @@ button.legend-row:hover,
   }
 }
 .thin-note {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   font-size: 13px;
   color: var(--muted);
   border-left: 2px solid var(--line-2);
@@ -2538,19 +2541,23 @@ button.legend-row:hover,
   color: var(--muted);
 }
 
-/* Themes under the answer summary. */
+/* Themes under the answer summary. Row text, count and bar share the column edge; the hover/selected fill bleeds past it. */
 .themes {
-  margin-top: 16px;
+  margin-top: 24px;
+}
+.themes .why-label {
+  margin-bottom: 4px;
 }
 .themes ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 .themes button {
-  width: 100%;
+  width: calc(100% + 20px);
+  margin: 0 -10px;
   display: grid;
   gap: 5px;
   padding: 8px 10px;
