@@ -7,6 +7,7 @@ import { collectReddit, fetchRedditProfiles, fetchSubredditInfo } from "./reddit
 import { collectX } from "./x.ts";
 import { buildThemes } from "./themes.ts";
 import { countIssues, reconcileThemes } from "./counts.ts";
+import { PICKS_CHUNK, isRealPick, otherPicks, planPicks, tallyPicks, type PostPick } from "./picks.ts";
 import {
   SORT_BATCH,
   optionsModel,
@@ -42,6 +43,9 @@ const MIN_OPTION_SHARE = 0.03;
 const MIN_OPTION_SHARE_LONG_TAIL = 0.012;
 /** Shared by every search on this function instance. */
 const llmGate = new Semaphore(Number(process.env.SORT_CONCURRENCY ?? 160));
+/** KAN-408 pick tally ("best X" only): its own gate so it never delays the sorter or the first poll. */
+const picksGate = new Semaphore(Number(process.env.PICKS_CONCURRENCY ?? 60));
+const PICKS_WAIT_MS = Number(process.env.PICKS_WAIT_MS ?? 5_000);
 /** Most posts each source may send to the sorter; past this, extra posts cost money but barely move the poll. */
 const POOL_CAP: Record<V3Source, number> = { reddit: Number(process.env.POOL_CAP_REDDIT ?? 3500), x: Number(process.env.POOL_CAP_X ?? 4500) };
 /** Replies this short ("this", "lol", "+1") almost never carry a stance the sorter can use. */
@@ -241,12 +245,14 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     let base: Option[] = [];
     // Leads are only meaningful when people buy the thing asked about; unknown counts as purchasable.
     let purchasable = true;
+    let qtype: string | undefined;
     const sample = sampleForOptions(pool);
     const sampleIds = sample.map((p) => p.id);
     try {
       if (sample.length >= 10) {
         const w = await writeOptions(req.query, sample, signal);
         if (w.purchasable === false) purchasable = false;
+        qtype = w.qtype;
         base = w;
       } else base = await writeOptionsFromQuestion(req.query, signal);
     } catch (e) {
@@ -350,6 +356,22 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
 
     const inflight = new Set<Promise<void>>();
     const sortDeadline = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1_000, SORT_DEADLINE_MS - elapsed()))]);
+    // KAN-408: on "best X" questions every opinion's named pick(s) are written down while sorting goes on.
+    const tallyOn = qtype === "best_x" && process.env.PICKS !== "0";
+    const pickOf = new Map<string, PostPick>();
+    let pickQueue: RawPost[] = [];
+    const pickJobs = new Set<Promise<void>>();
+    const tallyTitles = options.map((o) => o.title);
+    const flushPicks = (all = false) => {
+      while (pickQueue.length >= PICKS_CHUNK || (all && pickQueue.length)) {
+        const chunk = pickQueue.splice(0, PICKS_CHUNK);
+        const job = picksGate
+          .run(() => tallyPicks(req.query, tallyTitles, chunk, signal))
+          .then((got) => chunk.forEach((p, i) => got[i] && pickOf.set(p.id, got[i]!)))
+          .finally(() => pickJobs.delete(job));
+        pickJobs.add(job);
+      }
+    };
     const runBatch = (batch: RawPost[]) => {
       const job = llmGate
         .run(() => (sortDeadline.aborted ? Promise.resolve(new Array(batch.length)) : sortBatch(req.query, options, batch, sortDeadline)))
@@ -373,8 +395,10 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
               const post = toPost(p, lab);
               shown.set(p.id, post);
               fresh.push(post);
+              if (tallyOn && lab.option) pickQueue.push(p);
             }
           });
+          if (tallyOn) flushPicks();
           if (fresh.length) emit({ event: "posts", data: { posts: fresh } });
           if (!timing.first_poll && shown.size >= 5) {
             mark("first_poll");
@@ -430,9 +454,44 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     stage = "refining";
     const optionPosts = (oid: string) => [...shown.values()].filter((p) => p.option === oid);
     const reassigned: Post[] = [];
+    // KAN-408: "best X" options re-selected from the pick tally (top picks by real support across all posts).
+    let planned = false;
+    let otherPickCount: number | undefined;
+    if (tallyOn) {
+      flushPicks(true);
+      await within(Promise.all([...pickJobs]), Math.min(PICKS_WAIT_MS, Math.max(1_500, FINISH_BY_MS - 14_000 - elapsed())), undefined);
+      const opinionPosts = [...shown.values()].filter((p) => p.option);
+      timing.picks_tallied = opinionPosts.filter((p) => pickOf.has(p.id)).length;
+      mark("picks_done");
+      if (opinionPosts.length >= 40 && timing.picks_tallied >= opinionPosts.length * 0.7) {
+        const plan = planPicks(req.query, options, opinionPosts.map((p) => ({ id: p.id, option: p.option!, pick: pickOf.get(p.id) })));
+        // New ids keep a free colour slot (the UI colours by the id's number mod 8) and never reuse an old id.
+        const usedSlots = new Set(plan.keep.map((id) => (parseInt(id.replace(/\D/g, ""), 10) || 0) % 8));
+        const newIds = plan.added.map(() => {
+          let s = 0;
+          while (usedSlots.has(s) && s < 8) s++;
+          usedSlots.add(s);
+          return `o${8 + s}p`;
+        });
+        const kept = options.filter((o) => plan.keep.includes(o.id)).sort((a, b) => plan.keep.indexOf(a.id) - plan.keep.indexOf(b.id));
+        options.splice(0, options.length, ...kept, ...plan.added.map((o, j) => ({ ...o, id: newIds[j]! })));
+        for (const [id, to] of plan.assign) {
+          const post = shown.get(id);
+          if (!post) continue;
+          if (to === null) {
+            if (pickOf.get(id)?.code === "W") removed++;
+            else noStance++;
+          }
+          post.option = to === null ? null : to.startsWith("new:") ? newIds[Number(to.slice(4))]! : to;
+          reassigned.push(post);
+        }
+        planned = true;
+        Object.assign(timing, { picks_mode: plan.mode === "kinds" ? 2 : 1, picks_added: plan.added.length, picks_moved: plan.assign.size, picks_dropped_wrong_place: plan.stats.dropped_wrong_place, picks_dropped_non_answer: plan.stats.dropped_non_answer, picks_coverage: plan.stats.pick_coverage, kinds_coverage: plan.stats.kind_coverage });
+      }
+    }
     const otherPosts = optionPosts(OTHER_ID);
     const opinionTotal = [...shown.values()].filter((p) => p.option).length;
-    if (otherPosts.length >= Math.max(8, opinionTotal * 0.1) && elapsed() < SPLIT_LATEST_MS && options.length < 8) {
+    if (!planned && otherPosts.length >= Math.max(8, opinionTotal * 0.1) && elapsed() < SPLIT_LATEST_MS && options.length < 8) {
       const ordered = otherPosts.sort((a, b) => b.rank - a.rank);
       const byId = new Map(pool.map((r) => [r.id, r]));
       const split = await within(splitOther(req.query, options, ordered.map((p) => byId.get(p.id)!), signal), Math.max(4_000, Math.min(8_000, FINISH_BY_MS - 8_000 - elapsed())), { added: [], assign: new Map<number, number>() });
@@ -457,7 +516,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const otherNow = optionPosts(OTHER_ID);
     const opinionsMid = [...shown.values()].filter((p) => p.option).length;
     timing.other_pct_before_deepen = opinionsMid ? Math.round((otherNow.length / opinionsMid) * 1000) / 10 : 0;
-    if (opinionsMid >= 40 && otherNow.length > opinionsMid * DEEPEN_OTHER_SHARE && elapsed() < DEEPEN_LATEST_MS) {
+    if (!planned && opinionsMid >= 40 && otherNow.length > opinionsMid * DEEPEN_OTHER_SHARE && elapsed() < DEEPEN_LATEST_MS) {
       const ordered = otherNow.sort((a, b) => b.rank - a.rank);
       const byId = new Map(pool.map((r) => [r.id, r]));
       const t0 = elapsed();
@@ -526,7 +585,17 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     emit(planEvent());
     if (reassigned.length) emit({ event: "posts", data: { posts: reassigned, updated: true } });
     const finalPoll = snapshot(true);
-    if (folded.length) finalPoll.other_breakdown = folded.sort((a, b) => b.count - a.count).slice(0, 8);
+    if (planned) {
+      // Named picks still inside Other (including folded options' posts), aliases merged.
+      const names = optionPosts(OTHER_ID).flatMap((p) => {
+        const k = pickOf.get(p.id);
+        return isRealPick(req.query, k) ? [k.picks[0]!] : [];
+      });
+      const left = otherPicks(req.query, names);
+      if (left.breakdown.length) finalPoll.other_breakdown = left.breakdown;
+      otherPickCount = left.distinct;
+      if (otherPickCount) finalPoll.other_picks = otherPickCount;
+    } else if (folded.length) finalPoll.other_breakdown = folded.sort((a, b) => b.count - a.count).slice(0, 8);
     // KAN-422 follow-up: options added or refilled during refine missed the first profile pass; cover each final
     // option's top 10 Reddit authors (usually a few dozen new handles, mostly cached), in parallel with the summaries.
     const asked = new Set(leadHandles);

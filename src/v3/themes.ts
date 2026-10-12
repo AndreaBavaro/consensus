@@ -53,7 +53,8 @@ async function writeThemes(query: string, options: { id: string; title: string }
   const r = await completeJson<{ themes?: { title?: string; description?: string; options?: unknown[] }[] }>(
     prompt,
     SCHEMA,
-    { model: reasonsModel(), maxTokens: 1400, timeoutMs: 12_000, signal },
+    // 12 themes with descriptions run ~1.2-1.6k tokens; at 1400 the JSON was cut mid-string and the run got 0 themes.
+    { model: reasonsModel(), maxTokens: 2400, timeoutMs: 12_000, signal },
     0,
   );
   const seen = new Set<string>();

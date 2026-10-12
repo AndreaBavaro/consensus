@@ -94,6 +94,8 @@ export interface Poll {
   pool: { collected: number; sorted: number; unsorted: number; removed_spam: number; no_stance: number; duplicates: number; author_capped: number; prefiltered?: number };
   /** Named picks too small to be their own option, now counted inside Other (largest first). */
   other_breakdown?: { title: string; count: number }[];
+  /** "best X" polls (KAN-408): how many distinct named picks Other holds, for "Other: N other picks". */
+  other_picks?: number;
   /**
    * What was READ, kept apart from what was COUNTED (KAN-409). Meta line: "{total_opinions} opinions counted from
    * {scanned.total} posts scanned". x_fetched = tweets returned by search before dedupe/filters; x_kept and
