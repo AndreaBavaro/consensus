@@ -46,13 +46,33 @@ interface Tweet {
   author?: { userName?: string; name?: string; url?: string; profilePicture?: string; followers?: number; isBlueVerified?: boolean; isVerified?: boolean; isAutomated?: boolean };
 }
 
+/** Why X pages ended without data (pace skip vs retries exhausted by kind), logged once per search. */
+type XFail = "skip" | "r429" | "r5xx" | "timeout" | "net" | "http4xx" | "retry429" | "retry5xx" | "retryTimeout" | "retryNet";
+const fails = new WeakMap<object, Partial<Record<XFail, number>>>();
+const bump = (k: XFail) => {
+  const m = meter();
+  if (!m) return;
+  const f = fails.get(m) ?? {};
+  f[k] = (f[k] ?? 0) + 1;
+  fails.set(m, f);
+};
+
+/*
+ * One rate cut per 429 episode. A burst of 429s comes back on many in-flight pages at once; cutting 40% on each one took
+ * the rate from 34 to 3.4 req/s within ~250ms, after which pace() skipped ~12% of a search's pages (x_failed).
+ */
+const CUT_EVERY_MS = Number(process.env.X_CUT_EVERY_MS ?? 1_000);
+let lastCut = 0;
+
 async function xSearch(query: string, type: "Top" | "Latest", cursor: string, signal?: AbortSignal) {
   const m = meter();
+  let last: XFail = "retryNet";
   for (let attempt = 0; attempt < 5; attempt++) {
     if (signal?.aborted) return null;
     // Global pacing (xpace.ts): under heavy load a page that would queue too long is skipped, not waited on.
     if (!(await pace())) {
       if (m) m.xFailed++;
+      bump("skip");
       return null;
     }
     if (m) m.xCalls++;
@@ -62,10 +82,13 @@ async function xSearch(query: string, type: "Top" | "Latest", cursor: string, si
         signal: AbortSignal.any([AbortSignal.timeout(12_000), ...(signal ? [signal] : [])]),
       });
       if (res.status === 429) {
-        xBackoff(Number(res.headers.get("retry-after")) || 0);
-        throw new Error("retry 429");
+        if (Date.now() - lastCut > CUT_EVERY_MS) {
+          lastCut = Date.now();
+          xBackoff(Number(res.headers.get("retry-after")) || 0);
+        }
+        throw Object.assign(new Error("retry 429"), { kind: "retry429" });
       }
-      if (res.status >= 500) throw new Error(`retry ${res.status}`);
+      if (res.status >= 500) throw Object.assign(new Error(`retry ${res.status}`), { kind: "retry5xx" });
       if (!res.ok) {
         // A rejected query is retried once without exclusions and quoted-phrase groups beyond the first.
         const simpler = res.status === 400 ? simplify(query) : null;
@@ -75,6 +98,7 @@ async function xSearch(query: string, type: "Top" | "Latest", cursor: string, si
           continue;
         }
         if (m) m.xFailed++;
+        bump("http4xx");
         log.warn(`search ${res.status}`, { query });
         return null;
       }
@@ -85,10 +109,13 @@ async function xSearch(query: string, type: "Top" | "Latest", cursor: string, si
     } catch (e) {
       if (signal?.aborted) return null;
       if (m) m.xRetries++;
+      last = (e as { kind?: XFail }).kind ?? ((e as Error)?.name === "TimeoutError" ? "retryTimeout" : "retryNet");
+      bump(last);
       await sleep(500 * 2 ** attempt + Math.random() * 300);
     }
   }
   if (m) m.xFailed++;
+  bump(last === "retry429" ? "r429" : last === "retry5xx" ? "r5xx" : last === "retryTimeout" ? "timeout" : "net");
   return null;
 }
 
@@ -408,6 +435,9 @@ export async function collectX(...args: Parameters<typeof collectXInner>): Retur
   try {
     return await collectXInner(...args);
   } finally {
+    const m = meter();
+    const f = m && fails.get(m);
+    if (f) log.info("x failures", f);
     void release();
   }
 }
