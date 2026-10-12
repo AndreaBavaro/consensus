@@ -170,20 +170,6 @@ export const PostRow = memo(function PostRow({
   );
 });
 
-export function PostSkeleton({ i = 0 }: { i?: number }) {
-  return (
-    <div className="post sk-post" aria-hidden="true" style={{ animationDelay: `${i * 60}ms` }}>
-      <span className="post-icon sk" />
-      <div className="post-main">
-        <span className="sk sk-line" style={{ width: '38%' }} />
-        <span className="sk sk-line" style={{ width: `${88 - (i % 3) * 9}%` }} />
-        <span className="sk sk-line" style={{ width: `${62 - (i % 2) * 14}%` }} />
-        <span className="sk sk-line short" style={{ width: '22%' }} />
-      </div>
-    </div>
-  );
-}
-
 /** Desktop leads: one dense, scannable table row per lead. */
 export function LeadsTable({
   posts,

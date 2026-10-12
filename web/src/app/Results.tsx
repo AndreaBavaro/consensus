@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowUpDown, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Lock, RotateCw, SearchX, Users, X as XIcon } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Lock, RotateCw, SearchX, Users, X as XIcon } from 'lucide-react';
 import type { Intent, Post, PollOption, Theme } from './api';
 import { GoogleButton, useAuth } from './auth';
 import { Donut, DonutSkeleton } from './Donut';
 import { alpha, headline, INTENT_META, INTENT_ORDER, num, optionColor } from './format';
 import { RedditMark, XMark } from './icons';
-import { LeadsTable, PostRow, PostSkeleton, useCopy } from './Posts';
+import { LeadsTable, PostRow, useCopy } from './Posts';
 import type { SearchState } from './useSearch';
 import { useMedia } from './useMedia';
 
@@ -19,7 +19,6 @@ const STAGE_LABEL: Record<string, string> = {
   refining: 'Counting the last votes',
   writing_reasons: 'Writing the summaries',
 };
-const EXPECTED_MS = 15_000;
 
 /** Leads only matter for buying questions: enough people with their own buying situation. */
 export function showLeads(s: SearchState): boolean {
@@ -138,17 +137,15 @@ function Legend({ options, selected, onSelect, live, hovered, onHover }: { optio
   );
 }
 
-function LegendSkeleton({ titles }: { titles: string[] }) {
-  // Always at least 4 rows so the column doesn't jump when the real options arrive.
+function LegendPending({ titles }: { titles: string[] }) {
+  // Reserve at least 4 rows so the column keeps its height until the real options arrive.
   const rows = [...titles, ...Array(Math.max(0, 4 - titles.length)).fill('')] as string[];
   return (
     <div className="legend" aria-hidden="true">
       {rows.map((t, i) => (
-        <div key={i} className="legend-row sk-row">
-          <span className="dot sk" />
-          {t ? <span className="legend-title faded">{t}</span> : <span className="sk sk-line" style={{ width: `${60 - i * 12}%` }} />}
-          <span className="sk sk-line" style={{ width: 34 }} />
-          <span className="sk sk-line" style={{ width: 28 }} />
+        <div key={i} className={`legend-row pending ${t ? '' : 'blank'}`}>
+          <span className="dot" />
+          <span className="legend-title">{t || '\u00a0'}</span>
         </div>
       ))}
     </div>
@@ -188,83 +185,55 @@ function Themes({ themes, option, active, onPick }: { themes: Theme[]; option: P
   );
 }
 
-function Why({ option, summary, loading }: { option: PollOption | undefined; summary: string | undefined; loading: boolean }) {
+function Why({ option, summary, pending }: { option: PollOption | undefined; summary: string | undefined; pending: boolean }) {
   const c = optionColor(option?.id);
   return (
-    <section className="why" style={{ ['--c' as string]: c, ['--ct' as string]: alpha(c, option ? 0.13 : 0) }}>
+    <section className={`why ${pending ? 'pending' : ''}`} aria-hidden={pending || undefined} style={{ ['--c' as string]: c, ['--ct' as string]: alpha(c, option ? 0.13 : 0) }}>
       <div className="why-label">{option ? <>Why people say “{option.title}”</> : 'Why people say this'}</div>
       {summary ? (
         <blockquote className="why-quote" key={summary}>
           “{summary}”
         </blockquote>
-      ) : loading ? (
-        <div className="why-sk">
-          <span className="sk sk-line" style={{ width: '96%' }} />
-          <span className="sk sk-line" style={{ width: '88%' }} />
-          <span className="sk sk-line" style={{ width: '54%' }} />
-        </div>
       ) : (
-        <p className="why-none">{option?.description}</p>
+        <p className="why-none" key={option?.id}>
+          {option?.description ?? '\u00a0'}
+        </p>
       )}
     </section>
   );
 }
 
-function Status({ state }: { state: SearchState }) {
-  const p = state.progress;
-  const [now, setNow] = useState(0);
-  const t0 = useRef(performance.now());
-  const running = state.phase === 'connecting' || state.phase === 'streaming';
-  const finished = state.phase === 'done';
-  // Show "Done" briefly, then remove the bar so it never lingers on a stage label.
-  const [gone, setGone] = useState(false);
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setNow(performance.now() - t0.current), 200);
-    return () => clearInterval(id);
-  }, [running]);
-  useEffect(() => {
-    if (!finished) return;
-    const id = setTimeout(() => setGone(true), 1400);
-    return () => clearTimeout(id);
-  }, [finished]);
-  if (state.meta?.cached && finished) return null;
-  if ((!running && !finished) || gone) return null;
-  const elapsed = Math.max(now, p?.elapsed_ms ?? 0);
-  // Ease toward 95% over the typical run time so the bar never stalls or finishes early.
-  const pct = finished ? 100 : Math.min(95, 100 * (1 - Math.exp((-1.6 * elapsed) / EXPECTED_MS)));
-  const label = finished ? 'Done' : state.phase === 'connecting' ? 'Starting search' : STAGE_LABEL[p?.stage ?? 'searching'] ?? 'Searching';
-  const posts = (p?.reddit.posts ?? 0) + (p?.x.posts ?? 0);
-  return (
-    <div className={`status ${finished ? 'finished' : ''}`} aria-live="polite">
-      <div className="status-row">
-        <span className="status-label">
-          {finished ? <CheckCircle2 size={14} className="status-ok" /> : <span className="pulse" />} {label}
-        </span>
-        <span className="status-counts">
-          {p ? (
-            <>
-              {num(p.reddit.threads)} threads · {num(posts)} posts
-            </>
-          ) : (
-            ' '
-          )}
-        </span>
-      </div>
-      <div className="bar">
-        <span style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function Caption({ state }: { state: SearchState }) {
   const poll = state.poll;
-  if (!poll || !state.done)
+  const running = state.phase === 'connecting' || state.phase === 'streaming';
+  if (!poll || !state.done) {
+    let text = state.phase === 'connecting' ? 'Starting search' : STAGE_LABEL[state.progress?.stage ?? 'searching'] ?? 'Searching';
+    if (poll && poll.total_opinions > 0) text = `${num(poll.total_opinions)} opinions so far`;
+    return (
+      <p className="caption" aria-live="polite">
+        <span className="cap-text">{running || poll ? text : '\u00a0'}</span>
+        {(running || (poll && !poll.final)) && <span className="live-badge">Live</span>}
+      </p>
+    );
+  }
+  const d = state.done;
+  const secs = d.total_ms;
+  const firstPoll = d.timing?.first_poll;
+  const time = state.meta?.cached ? (
+    <span className="cap-time"> · saved result</span>
+  ) : secs ? (
+    <span className="cap-time" title={firstPoll ? `First results in ${(firstPoll / 1000).toFixed(1)}s, done in ${(secs / 1000).toFixed(1)}s` : undefined}>
+      {' '}
+      · took {(secs / 1000).toFixed(1)}s
+    </span>
+  ) : null;
+  if (poll.scanned?.total)
     return (
       <p className="caption">
-        {poll ? `${num(poll.total_opinions)} opinions so far` : state.phase === 'connecting' || state.phase === 'streaming' ? 'Searching Reddit and X' : ' '}
-        {(state.phase === 'connecting' || state.phase === 'streaming' || (poll && !poll.final)) && <span className="live-badge">Live</span>}
+        <span className="cap-text">
+          {num(poll.total_opinions)} opinions counted from {num(poll.scanned.total)} posts scanned
+          {time}
+        </span>
       </p>
     );
   const parts: React.ReactNode[] = [];
@@ -280,21 +249,37 @@ function Caption({ state }: { state: SearchState }) {
         <XMark size={11} /> {num(poll.sources.x.posts)} posts
       </span>,
     );
-  const d = state.done;
-  const secs = d.total_ms;
-  const firstPoll = d.timing?.first_poll;
   return (
     <p className="caption">
-      {num(poll.total_opinions)} opinions from {parts.length === 2 ? [parts[0], ' and ', parts[1]] : parts}
-      {state.meta?.cached ? (
-        <span className="cap-time"> · saved result</span>
-      ) : secs ? (
-        <span className="cap-time" title={firstPoll ? `First results in ${(firstPoll / 1000).toFixed(1)}s, done in ${(secs / 1000).toFixed(1)}s` : undefined}>
-          {' '}
-          · took {(secs / 1000).toFixed(1)}s
-        </span>
-      ) : null}
+      <span className="cap-text">
+        {num(poll.total_opinions)} opinions from {parts.length === 2 ? [parts[0], ' and ', parts[1]] : parts}
+        {time}
+      </span>
     </p>
+  );
+}
+
+/** The one loading line in the posts area: live counts per source until the first sorted posts land. */
+function ListWait({ state }: { state: SearchState }) {
+  const p = state.progress;
+  const threads = p?.reddit.threads ?? 0;
+  const xPosts = p?.x.posts ?? 0;
+  return (
+    <div className="list-wait" aria-hidden="true">
+      <span className="pulse" />
+      {threads || xPosts ? (
+        <span className="list-wait-counts">
+          <span className="cap-src">
+            <RedditMark size={13} /> {num(threads)} {threads === 1 ? 'thread' : 'threads'}
+          </span>
+          <span className="cap-src">
+            <XMark size={11} /> {num(xPosts)} posts
+          </span>
+        </span>
+      ) : (
+        <span className="list-wait-counts">Finding posts</span>
+      )}
+    </div>
   );
 }
 
@@ -431,6 +416,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
 
   const live = !!poll && !poll.final;
   const loadingPosts = running && shown.length === 0;
+  const hasPoll = !!poll && poll.total_opinions > 0;
 
   return (
     <div className="results">
@@ -459,7 +445,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
               <DonutSkeleton found={state.progress?.pool ?? 0} label={state.progress?.pool ? 'posts' : 'searching'} />
             )}
           </div>
-          {poll && poll.total_opinions > 0 ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} /> : <LegendSkeleton titles={state.options.map((o) => o.title)} />}
+          {poll && poll.total_opinions > 0 ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
           {!live && poll?.other_breakdown && poll.other_breakdown.length > 0 && (
             <p className="also-mentioned">
               <span className="muted">Also mentioned in Other: </span>
@@ -472,7 +458,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             </p>
           )}
         </div>
-        <Why option={poll && poll.total_opinions > 0 ? option : undefined} summary={selected ? state.reasons[selected]?.summary : undefined} loading={running || !state.done} />
+        <Why option={hasPoll ? option : undefined} summary={hasPoll && selected ? state.reasons[selected]?.summary : undefined} pending={!hasPoll} />
         <Themes
           themes={state.themes}
           option={poll && poll.total_opinions > 0 ? option : undefined}
@@ -487,7 +473,6 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
       </aside>
 
       <section className="posts-col" ref={listTop}>
-        <Status state={state} />
         <div className="eyebrow posts-eyebrow">
           {tab === 'leads' ? 'Leads' : option ? (
             <>
@@ -546,7 +531,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
 
         <div className={`post-list ${running ? 'streaming' : ''}`} key={`${tab}-${selected}-${sort}-${intent}-${themeId}-${cur}`}>
           {loadingPosts ? (
-            Array.from({ length: 6 }, (_, i) => <PostSkeleton key={i} i={i} />)
+            <ListWait state={state} />
           ) : tab === 'leads' && desktop ? (
             <LeadsTable posts={shown} communities={state.communities} authors={state.authors} copied={copied} onCopy={onCopy} />
           ) : shown.length ? (
@@ -554,7 +539,6 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
           ) : (
             <p className="list-empty">No {tab === 'all' ? '' : tab === 'leads' ? 'leads' : tab === 'x' ? 'X ' : 'Reddit '}posts for this answer yet.</p>
           )}
-          {running && shown.length > 0 && shown.length < pageSize && <PostSkeleton i={0} />}
         </div>
 
         <div className="list-foot">

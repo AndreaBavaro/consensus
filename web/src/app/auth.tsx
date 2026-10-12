@@ -118,11 +118,9 @@ function RecentSearches({ onPick }: { onPick: () => void }) {
       </span>
       <div className="history">
         {history === null ? (
-          <div className="history-sk">
-            <span className="sk sk-line" style={{ width: '82%' }} />
-            <span className="sk sk-line" style={{ width: '64%' }} />
-            <span className="sk sk-line" style={{ width: '72%' }} />
-          </div>
+          <p className="history-empty" aria-busy="true">
+             
+          </p>
         ) : history.length === 0 ? (
           <p className="history-empty">Nothing yet.</p>
         ) : (
