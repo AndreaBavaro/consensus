@@ -5,6 +5,7 @@ import { GoogleButton, useAuth } from './auth';
 import { Donut, DonutSkeleton } from './Donut';
 import { alpha, headline, INTENT_META, INTENT_ORDER, num, optionColor } from './format';
 import { RedditMark, XMark } from './icons';
+import { cleanPostText } from './postText';
 import { LeadsTable, PostRow, useCopy } from './Posts';
 import type { SearchState } from './useSearch';
 import { useMedia } from './useMedia';
@@ -110,7 +111,7 @@ function SortMenu({ value, onChange }: { value: Sort; onChange: (s: Sort) => voi
   );
 }
 
-function Legend({ options, selected, onSelect, live, hovered, onHover, total }: { options: PollOption[]; selected: string | null; onSelect: (id: string) => void; live: boolean; hovered: string | null; onHover: (id: string | null) => void; total: number }) {
+function Legend({ options, selected, onSelect, live, hovered, onHover, total, otherPicks }: { options: PollOption[]; selected: string | null; onSelect: (id: string) => void; live: boolean; hovered: string | null; onHover: (id: string | null) => void; total: number; otherPicks?: number }) {
   return (
     <div className="legend" role="listbox" aria-label="Answers">
       {options.map((o) => {
@@ -129,7 +130,10 @@ function Legend({ options, selected, onSelect, live, hovered, onHover, total }: 
             title={o.description}
           >
             <span className="dot" />
-            <span className="legend-title">{o.title}</span>
+            <span className="legend-title">
+              {o.title}
+              {o.is_other && !live && otherPicks ? <span className="legend-sub"> · {num(otherPicks)} {otherPicks === 1 ? 'pick' : 'picks'}</span> : null}
+            </span>
             <span className="legend-pct">{live || o.percent || o.count ? (o.count > 0 && o.percent < 0.5 ? '<1%' : `${Math.round(o.percent)}%`) : ''}</span>
             <span className="legend-count">{num(o.count)}</span>
           </button>
@@ -202,27 +206,49 @@ function Themes({ themes, option, all, posts, active, onPick }: { themes: Theme[
     .map((t) => ({ t, n: t.post_ids.reduce((a, id) => a + (inScope(id) ? 1 : 0), 0) }))
     .filter((r) => r.n > 0)
     .sort((a, b) => b.n - a.n)
-    .slice(0, 6);
+    .slice(0, 8);
   if (!rows.length) return null;
   const max = rows[0]!.n;
+  // One short example for the open theme, from a voter in scope (the theme's own quotes first, then its best post).
+  const example = (t: Theme) => {
+    const q = t.quotes.find((x) => inScope(x.post_id));
+    const p = posts[q?.post_id ?? t.post_ids.find(inScope) ?? ''];
+    if (!p) return null;
+    const raw = cleanPostText(q?.text || (p.thread_title && p.text.startsWith(p.thread_title) ? p.text.slice(p.thread_title.length) : p.text) || p.text).replace(/\s+/g, ' ');
+    const text = raw.length > 180 ? `${raw.slice(0, 180).replace(/\s+\S*$/, '')}…` : raw;
+    return { text, source: p.source, who: p.source === 'reddit' ? `u/${p.author.handle}` : `@${p.author.handle}` };
+  };
   const c = option ? optionColor(option.id) : 'var(--ink-2)';
   return (
     <section className={`themes ${option ? '' : 'all'}`} style={{ ['--c' as string]: c }} aria-label="What people are saying">
       <div className="why-label">What people are saying</div>
       <ul>
-        {rows.map(({ t, n }) => (
-          <li key={t.id}>
-            <button type="button" className={active === t.id ? 'on' : ''} aria-pressed={active === t.id} onClick={() => onPick(active === t.id ? null : t.id)} title={t.description}>
-              <span className="th-top">
-                <span className="th-title">{t.title}</span>
-                <span className="th-n">{num(n)}</span>
-              </span>
-              <span className="th-bar">
-                <span style={{ width: `${Math.max(4, (100 * n) / max)}%` }} />
-              </span>
-            </button>
-          </li>
-        ))}
+        {rows.map(({ t, n }) => {
+          const on = active === t.id;
+          const ex = on ? example(t) : null;
+          return (
+            <li key={t.id}>
+              <button type="button" className={on ? 'on' : ''} aria-pressed={on} aria-expanded={on} onClick={() => onPick(on ? null : t.id)} title={t.description}>
+                <span className="th-top">
+                  <span className="th-title">{t.title}</span>
+                  <span className="th-n">{num(n)}</span>
+                </span>
+                <span className="th-bar">
+                  <span style={{ width: `${Math.max(4, (100 * n) / max)}%` }} />
+                </span>
+                {ex && (
+                  <span className="th-quote">
+                    <span className="th-quote-text">“{ex.text}”</span>
+                    <span className="th-quote-by">
+                      {ex.source === 'reddit' ? <RedditMark size={12} /> : <XMark size={10} />}
+                      {ex.who}
+                    </span>
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -516,7 +542,7 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             )}
           </div>
           <div className="legend-box" ref={legendBox}>
-            {hasPoll ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} total={allTotal} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
+            {hasPoll ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} total={allTotal} otherPicks={poll?.final ? poll.other_picks : undefined} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
           </div>
         </div>
         {!deferPosts && !allView && (
@@ -524,6 +550,19 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             <Why option={hasPoll ? option : undefined} summary={hasPoll && selected ? state.reasons[selected]?.summary : undefined} pending={!hasPoll} />
           </div>
         )}
+        <Themes
+          themes={state.done ? state.themes : []}
+          posts={state.posts}
+          option={poll && poll.total_opinions > 0 ? option : undefined}
+          all={allView && hasPoll ? optionIds : undefined}
+          active={themeId}
+          onPick={(id) => {
+            setThemeId(id);
+            setPage(1);
+            if (tab === 'leads') setTab('all');
+            if (id && !desktop) listTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
         {state.done && poll?.other_breakdown && poll.other_breakdown.length > 0 && (
           <p className="also-mentioned">
             <span className="muted">Also mentioned in Other: </span>
@@ -545,19 +584,6 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             )}
           </p>
         )}
-        <Themes
-          themes={state.done ? state.themes : []}
-          posts={state.posts}
-          option={poll && poll.total_opinions > 0 ? option : undefined}
-          all={allView && hasPoll ? optionIds : undefined}
-          active={themeId}
-          onPick={(id) => {
-            setThemeId(id);
-            setPage(1);
-            if (tab === 'leads') setTab('all');
-            if (id && !desktop) listTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-        />
       </aside>
 
       {deferPosts ? null : (
