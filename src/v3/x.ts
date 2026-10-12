@@ -76,6 +76,13 @@ const QUEUE_MS = Number(process.env.X_QUEUE_MS ?? 10_000);
 const QUEUE_TAIL_MS = Number(process.env.X_QUEUE_TAIL_MS ?? 8_000);
 /** Opinions per page by lane kind on kb1: replies 2.3, opinion 1.5-1.9, pick 1.3, broad 0.7. */
 const KIND_RANK: Record<XLane["kind"], number> = { replies: 0, opinion: 0, pick: 0.5, convo: 0.5, popular: 1, broad: 1 };
+/*
+ * A lane whose served pages kept at least this many new usable posts per page sends its next page ahead of untried
+ * first pages. Lanes at 12+ kept/page carry 2.15 opinions/page vs 0.22 under 5 (kb1/k1/r6/k407a/r7-r8/b0, 46k pages);
+ * at N=10 the pure shallow-first queue spent pear x's ~62 pages on 62 page-0s and never reached "yc changed my life".
+ * 0 turns it off.
+ */
+const HOT_KEPT = Number(process.env.X_HOT_KEPT ?? 12);
 
 class PageQueue {
   private q: { pri: number; seq: number; at: number; signal?: AbortSignal; go: (r: "go" | "deferred" | "skip") => void }[] = [];
@@ -625,7 +632,8 @@ async function collectXInner(
       for (let page = 0; page < lane.pages && !signal?.aborted; page++) {
         if (overBudget()) { st.stop = "budget"; break; }
         if (page > 0 && elapsed() > X_TIME_MS) { st.stop = "time"; break; }
-        const data = await xSearch(lane.query, lane.type, cursor, signal, qs(page + KIND_RANK[lane.kind]));
+        const hot = HOT_KEPT > 0 && page > 0 && st.kept / st.pages >= HOT_KEPT;
+        const data = await xSearch(lane.query, lane.type, cursor, signal, qs(hot ? -0.5 : page + KIND_RANK[lane.kind]));
         const got = data?.tweets ?? [];
         st.pages++;
         st.raw += got.length;
