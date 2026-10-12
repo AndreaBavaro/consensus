@@ -1,0 +1,179 @@
+.container {
+  background-color: var(--color-background-secondary);;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease-in-out;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out forwards;
+  animation-delay: calc(var(--index) * 0.1s);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .container {
+    margin: 8px 0;
+    padding: 10px;
+    width: 100%;
+  }
+}
+
+/* Theme Colors */
+.default { background-color: var(--color-background-secondary);; }
+.blue { background-color: rgba(96, 165, 250, 0.1); }
+.yellow { background-color: rgba(251, 191, 36, 0.1); }
+.purple { background-color: rgba(167, 139, 250, 0.1); }
+.red { background-color: rgba(248, 113, 113, 0.1); }
+.green { background-color: rgba(74, 222, 128, 0.1); }
+.teal { background-color: rgba(45, 212, 191, 0.1); }
+.pink { background-color: rgba(244, 114, 182, 0.1); }
+
+.container:hover {
+  transform: scale(1.01);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.headerLink {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.redditIcon {
+  width: 14px;
+  height: 14px;
+  fill:  var(--color-primary);;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.dot {
+  color: var(--color-text);
+  margin: 0 4px;
+}
+
+.subreddit {
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.subreddit:hover {
+  text-decoration: underline;
+}
+
+.postTitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+  color: var(--color-text);;
+  cursor: pointer;
+}
+
+.postTitle:hover {
+  color:  var(--color-primary);;
+  text-decoration: underline;
+}
+
+.content {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.content p {
+  margin-bottom: 0.5em;
+}
+
+.content p:last-child {
+  margin-bottom: 0;
+}
+
+.contentLink {
+  color:  var(--color-primary);;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.contentLink:hover {
+  text-decoration: underline;
+}
+
+.linkIcon {
+  cursor: pointer;
+  color: var(--color-text);;
+  transition: color 0.2s ease;
+}
+
+.linkIcon:hover {
+  color:  var(--color-primary);;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--color-background-secondary);
+}
+
+.votes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.upArrow {
+  color:  var(--color-primary);;
+  font-size: 12px;
+}
+
+.upvotes {
+  color: var(--color-text);
+}
+
+.score {
+  color: var(--color-background-secondary);
+}
+
+.date {
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.date:hover {
+  color: #4b5563;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

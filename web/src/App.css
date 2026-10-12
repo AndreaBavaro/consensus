@@ -1,0 +1,53 @@
+.App {
+  width: 100%;
+  min-height: 100vh;
+}
+
+@keyframes enter {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes textPulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.text-pulse {
+  animation: textPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes growWidth {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--target-width);
+  }
+}
+
+.animate-width {
+  animation: growWidth 1s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

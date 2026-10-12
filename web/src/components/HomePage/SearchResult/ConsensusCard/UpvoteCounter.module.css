@@ -1,0 +1,60 @@
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 4px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  margin-right: 4px;
+}
+
+.arrow {
+  display: block;
+  margin-bottom: 4px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.number {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 36px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color:  var(--color-primary);;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  margin-top: -1px;
+  text-align: center;
+  height: 28px;
+}
+
+.label {
+  font-size: 8px;
+  font-weight: 600;
+  margin-top: 0;
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.counter.animating .number {
+  transform: scale(1.05);
+}
+
+/* Bounce animation for the arrow during counting */
+.animating .arrow {
+  animation: bounce 0.3s cubic-bezier(0.36, 0, 0.66, -0.56) infinite alternate;
+}
+
+@keyframes bounce {
+  0% { 
+    transform: translateY(0);
+  }
+  100% { 
+    transform: translateY(-3px);
+  }
+}

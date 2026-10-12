@@ -1,0 +1,38 @@
+.container {
+  position: relative;
+  width: 100%;
+  margin-bottom: 0px; /* Default margin when expanded */
+}
+
+.grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.grid::-webkit-scrollbar {
+  display: none;
+}
+
+.grid > * {
+  flex: 0 0 auto;
+  width: 280px;
+  min-width: 150px;
+  max-width: 280px;
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+@media (max-width: 768px) {
+  .grid > * {
+    width: 200px;
+    min-width: 150px;
+    max-width: 200px;
+  }
+}

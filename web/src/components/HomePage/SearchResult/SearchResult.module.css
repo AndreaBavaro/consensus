@@ -1,0 +1,201 @@
+.pageContainer {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.mainContent {
+  width: 100%;
+  transition: width 0.2s ease, margin-right 0.2s ease;
+  overflow-x: hidden;
+}
+
+.mainContent.sidebarOpen {
+  width: calc(100% - 360px);
+  margin-right: 360px;
+}
+
+.error {
+  color: red;
+  margin: 20px;
+  text-align: center;
+}
+
+.titleWrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sectionsWrapper {
+  display: flex;
+  height: 100%;
+}
+
+.leftSection {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.horizontalConsensusWrapper {
+  margin-bottom: 16px;
+}
+
+.topBar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.sourcesExpandedWrapper {
+  width: 100%;
+  transition: all 0.3s ease-in-out;
+  text-align: left;
+}
+
+.sourcesSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.sourceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.showMoreButton {
+  background: var(--color-background-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 12px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05),
+             inset 0 1px 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.showMoreButton .plusIcon {
+  font-size: 11px;
+  color: var(--color-text);
+  transition: all 0.2s ease;
+  opacity: 0.9;
+}
+
+.showMoreButton span {
+  font-size: 11px;
+  color: var(--color-text);
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  opacity: 0.9;
+}
+
+.showMoreButton:hover {
+  background: var(--color-background-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08),
+             inset 0 1px 1px rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.showMoreButton:hover .plusIcon,
+.showMoreButton:hover span {
+  color: var(--color-primary);
+  opacity: 1;
+}
+
+.showMoreButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05),
+             inset 0 1px 1px rgba(255, 255, 255, 0.04);
+}
+
+.insightsGrid {
+  width: 100%;
+}
+
+.insightsWrapper {
+  columns: 1 auto;
+  column-gap: 24px;
+}
+
+.insightsWrapper > * {
+  break-inside: avoid;
+  margin-bottom: 24px;
+}
+
+@media (min-width: 768px) {
+  .insightsWrapper {
+    columns: 2 auto;
+  }
+}
+
+@media (min-width: 1280px) {
+  .insightsWrapper {
+    columns: 3 auto;
+  }
+}
+
+.masonryGrid {
+  display: flex;
+  width: auto;
+}
+
+.masonryColumn {
+  padding-left: 24px;
+  background-clip: padding-box;
+}
+
+@media (max-width: 768px) {
+  .sectionsWrapper {
+    flex-direction: column;
+    gap: 0px;
+  }
+  
+  .leftSection {
+    width: 100%;
+  }
+  
+  .showMoreButton {
+    height: 24px;
+    padding: 4px 10px;
+  }
+  
+  .showMoreButton span,
+  .showMoreButton .plusIcon {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+  }
+}
+
+.sourcesCollapsed {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}

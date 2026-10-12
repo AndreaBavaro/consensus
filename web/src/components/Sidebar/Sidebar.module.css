@@ -1,0 +1,218 @@
+.sidebar {
+  height: 100vh;
+  background-color: var(--color-background);;
+  border-right: 1px solid var(--color-background-secondary);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+}
+
+.sidebarHeader {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px;
+  position: relative;
+}
+
+.toggleButton {
+  position: fixed;
+  right: -50px;
+  top: 12px;
+  background-color: var(--color-background);;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--color-text);;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
+}
+
+.toggleButton:hover {
+  color:  var(--color-primary);;
+}
+
+/* When sidebar is closed, move button to bottom and change colors */
+.sidebar:not(.open) .toggleButton {
+  top: calc(92vh);
+  background-color:  var(--color-primary);;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.open .toggleButton {
+  color:  var(--color-primary);;
+  right: 8px;
+  top: 12px;
+}
+
+.sidebarContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 12px 0;
+  overflow-y: auto;
+}
+
+/* Clean scrollbar */
+.sidebarContent::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebarContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.themeContainer {
+
+    display: flex
+;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border: 1px solid var(--color-background-secondary);
+    background-color: var(--color-background);
+    gap: 8px;
+    position: relative;
+    margin: 8px;
+    border-radius: 16px;
+}
+
+.themeToggle {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.currentTheme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.themeIcon {
+  font-size: 16px;
+}
+
+.themeLabel {
+  font-size: 14px;
+}
+
+.themeMenu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 16px;
+  background: var(--color-background);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  min-width: 150px;
+  z-index: 2000;
+}
+
+.themeOption {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  border-radius: 6px;
+  gap: 8px;
+  position: relative;
+}
+
+.themeOption:hover {
+  background-color: var(--color-background-secondary);
+}
+
+.activeIndicator {
+  position: absolute;
+  right: 12px;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    width: 260px;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .themeContainer {
+    bottom: 24px;
+  }
+  
+  .themeMenu {
+    bottom: calc(100% + 8px);
+    top: auto;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+/* New Chat button */
+
+
+
+/* Chat items */
+.chatItem {
+  padding: 10px 12px;
+  margin: 2px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  color: var(--color-text);;
+  font-size: 14px;
+}
+
+.chatItem:hover {
+  background-color:  var(--color-primary);;
+}
+
+.chatItem.active {
+  background-color:  var(--color-primary);;
+}

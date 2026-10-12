@@ -1,0 +1,195 @@
+.container {
+  background: var(--color-background-secondary);
+  border-radius: 8px;
+  padding: 14px;
+  border: 1.5px solid var(--color-border);
+  border-left: 4px solid var(--accent-color);
+  width: 100%;
+  height: fit-content;
+  align-self: flex-start;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  word-wrap: break-word;
+}
+
+.contentRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.quoteIcon {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--accent-color);
+  opacity: 0.7;
+}
+
+.markdownWrapper {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.markdownWrapper p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.markdownWrapper h1,
+.markdownWrapper h2,
+.markdownWrapper h3 {
+  font-size: 1rem;
+  margin: 0 0 8px 0;
+}
+
+.markdownWrapper ul,
+.markdownWrapper ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  opacity: 0.9;
+}
+
+.metaInfo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.timestamp {
+  background: var(--color-background-secondary);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+}
+
+.dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
+.commentCount {
+  opacity: 0.7;
+}
+
+.sentimentIcon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.statsGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upvoteIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  padding: 3px 0;
+}
+
+.upvoteIndicator svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.upvoteIndicator span {
+  opacity: 0.9;
+}
+
+.commentToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  border: 1px solid var(--accent-color);
+  cursor: pointer;
+  background: transparent;
+  color: var(--accent-color);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  min-width: 0;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.commentToggle:hover, .commentToggle.active {
+  background: var(--accent-color);
+  color: var(--color-text-inverse);
+}
+
+.commentToggle svg {
+  flex-shrink: 0;
+}
+
+.commentToggle span {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.commentsContainer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 12px;
+    min-width: unset;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .metaInfo {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+}

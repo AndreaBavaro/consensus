@@ -1,0 +1,134 @@
+.container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: auto;
+}
+
+.chart {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.svg {
+  transform: rotate(0deg);
+  overflow: visible;
+}
+
+.background {
+  stroke: color-mix(in srgb, var(--color-background-secondary) 92%, black);
+  stroke-linecap: butt;
+}
+
+.arc {
+  stroke:  var(--color-primary);;
+  stroke-linecap: butt;
+  stroke-dashoffset: 0;
+  transition: stroke-dasharray 2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: stroke-dasharray;
+}
+
+.textContainer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: 100%;
+  opacity: 1;
+}
+
+.loaded .textContainer {
+  opacity: 1;
+}
+
+.loading .textContainer {
+  opacity: 1;
+}
+
+.loading .arc {
+  stroke: var(--color-background-secondary)
+}
+
+.skeletonPercentage {
+  width: 30px;
+  height: 16px;
+  margin: 0 auto 2px;
+  background: linear-gradient(
+    90deg,
+    #F3F4F6 0%,
+    var(--color-background-secondary) 50%,
+    #F3F4F6 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  border-radius: 4px;
+}
+
+.skeletonLabel {
+  width: 45px;
+  height: 10px;
+  margin: 0 auto;
+  background: linear-gradient(
+    90deg,
+    #F3F4F6 0%,
+    var(--color-background-secondary) 50%,
+    #F3F4F6 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  border-radius: 3px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.percentage {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.label {
+  font-size: 10px;
+  color: #6B7280;
+  line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+  .container {
+    width: 50px;
+    height: 50px;
+  }
+
+  .percentage {
+    font-size: 10px;
+    margin-bottom: 0;
+    line-height: 1;
+  }
+
+  .label {
+    font-size: 6px;
+    line-height: 1;
+  }
+
+  .skeletonPercentage {
+    width: 16px;
+    height: 10px;
+    margin-bottom: 1px;
+  }
+
+  .skeletonLabel {
+    width: 24px;
+    height: 6px;
+  }
+}

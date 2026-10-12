@@ -1,0 +1,148 @@
+.progressContainer {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.08) 0%, rgba(251, 146, 60, 0.08) 100%);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(249, 115, 22, 0.15);
+  transition: all 0.5s ease;
+}
+
+.progressContainer.complete {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border-color: rgba(34, 197, 94, 0.2);
+  animation: fadeOut 1s ease 0.5s forwards;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.stageLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fdba74;
+  letter-spacing: 0.02em;
+}
+
+.progressContainer.complete .stageLabel {
+  color: #86efac;
+}
+
+.percentage {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fb923c;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressContainer.complete .percentage {
+  color: #4ade80;
+}
+
+.progressTrack {
+  position: relative;
+  height: 6px;
+  background: rgba(249, 115, 22, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progressContainer.complete .progressFill {
+  background: linear-gradient(90deg, #22c55e 0%, #10b981 50%, #34d399 100%);
+}
+
+.progressGlow {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.6) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progressContainer.complete .progressGlow {
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.6) 0%, transparent 70%);
+}
+
+/* Shimmer animation on the fill */
+.progressFill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 25%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.4) 75%,
+    transparent 100%
+  );
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Pulse glow on the track */
+.progressFill::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  background: linear-gradient(90deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
+  border-radius: 6px;
+  opacity: 0.3;
+  filter: blur(4px);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Pause animations when complete */
+.progressContainer.complete .progressFill::after,
+.progressContainer.complete .progressFill::before {
+  animation: none;
+  opacity: 0;
+}

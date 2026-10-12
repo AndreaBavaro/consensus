@@ -1,0 +1,10 @@
+node_modules/
+.netlify/
+dist/
+eval/
+.env
+.env.*
+!.env.example
+.dbg/
+*.pem
+*.key

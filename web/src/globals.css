@@ -1,0 +1,91 @@
+:root {
+  /* Base theme colors - Light Mode */
+  --color-primary: #ff4500;
+  --color-background: #ffffff;
+  --color-background-secondary: #f3f4f6;
+  --color-text: #414141;
+  --color-border: var(--color-background-secondary);
+  --color-shadow: rgba(0, 0, 0, 0.1);
+
+    /* Dark Theme Base Colors */
+  --color-buy: #064e3b;      /* Darker emerald */
+  --color-sell: #991b1b;     /* Darker rose red */
+  --color-hold: #92400e;     /* Darker amber */
+  --color-hold-background: #78350f;  /* Even darker amber */
+
+  /* Premium Accent Colors */
+  --accent-buy: #10b981;     /* Brighter emerald */
+  --accent-sell: #ef4444;    /* Brighter rose */
+  --accent-hold: #f59e0b;    /* Brighter amber for better contrast */
+  
+  /* Premium Text Accents */
+  --text-accent-buy: #34d399;    /* Premium emerald text */
+  --text-accent-sell: #f87171;   /* Premium rose text */
+  --text-accent-hold: #fbbf24;   /* Premium amber text */
+
+  /* Light Text Colors */
+  --text-light-high: rgba(223, 221, 221, 0.897);
+  --text-light-medium: rgba(223, 221, 221, 0.897);
+  --text-light-low:rgba(223, 221, 221, 0.897);
+  --text-light-disabled: rgba(223, 221, 221, 0.897);
+
+/* Dark Theme Gradients */
+--gradient-buy: rgba(4, 47, 35, 0.95);
+--gradient-sell: rgba(127, 20, 20, 0.95);
+--gradient-hold: rgba(120, 55, 6, 0.95);
+/* Dark Theme Hover Gradients */
+--gradient-buy-hover: rgba(6, 78, 59, 0.98);
+--gradient-sell-hover: rgba(142, 26, 26, 0.98);
+--gradient-hold-hover: rgba(146, 64, 14, 0.98);
+  /* Dark Theme Glows */
+  --glow-buy: 0 0 20px rgba(6, 78, 59, 0.4);
+  --glow-sell: 0 0 20px rgba(153, 27, 27, 0.4);
+  --glow-hold: 0 0 20px rgba(146, 64, 14, 0.4);
+
+  --signal-buy-bright: #34d399;
+  --signal-sell-bright: #fb7185;
+  --signal-hold-bright: #ee7d04;
+
+}
+
+/* Sunset theme - warm, golden light mode */
+[data-theme='sunset'] {
+  --color-primary: #ff4500;
+  --color-background: #fff9f0;
+  --color-background-secondary: #ffe4cc;
+  --color-text: #4a3628;
+  --color-border: var(--color-background-secondary);
+  --color-shadow: rgba(255, 69, 0, 0.1);
+}
+
+/* Night theme - deep blue dark mode */
+[data-theme='night'] {
+  --color-primary: #e04810;
+  --color-background: #111827;
+  --color-background-secondary: #1F2937;
+  --color-text: #c5c4c4;
+  --color-border: var(--color-background-secondary);
+  --color-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* Shadow theme - deep gray dark mode */
+[data-theme='shadow'] {
+  --color-primary: #ff4500;
+  --color-background: #151515;
+  --color-background-secondary: #252525;
+  --color-text: #a0a0a0;
+  --color-border: var(--color-background-secondary);
+  --color-shadow: rgba(0, 0, 0, 0.25);
+}
+
+/* Global styles */
+html, body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  min-height: 100%;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: var(--color-background);
+}

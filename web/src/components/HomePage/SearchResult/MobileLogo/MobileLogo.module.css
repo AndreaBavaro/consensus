@@ -1,0 +1,26 @@
+.container {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 20px 4px;
+    background-color: var(--color-background);;
+  }
+
+  .logo {
+    color:  var(--color-primary);;
+    font-size: 24px;
+  }
+
+  .text {
+    color:  var(--color-primary);;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+}

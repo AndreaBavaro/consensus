@@ -1,0 +1,143 @@
+.sortContainer {
+  margin-bottom: 16px;
+}
+
+.sortTitle {
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.sortButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 32px;
+  transition: all 0.3s ease;
+}
+
+.sortButton {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-background-secondary);
+  background-color: var(--color-background);;
+  color: #1a1a1a;
+  transition: all 0.2s ease;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+  transform-origin: top;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sortButton:hover {
+  background: var(--color-background);
+}
+
+.sortButton.active {
+  background:  var(--color-primary);;
+  color: var(--color-background);
+  border-color:  var(--color-primary);;
+}
+
+
+
+.skeleton {
+  pointer-events: none;
+  opacity: 1;
+  animation: none;
+  width: 80px;
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #f7f7f7 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border: none;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  max-height: calc(100vh - 120px);
+}
+
+.header {
+  flex-shrink: 0;
+}
+
+.commentsContainer {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.filtersContainer {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.sortContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 245px;
+}
+
+.themesContainer {
+  animation: fadeInUp 0.5s ease-out forwards;
+  transform-origin: top;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0;
+  }
+}

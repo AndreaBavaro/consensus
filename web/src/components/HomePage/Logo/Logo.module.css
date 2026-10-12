@@ -1,0 +1,46 @@
+.logo_wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo_container {
+  display: flex;
+  align-items: center;
+}
+
+.logo_text {
+  font-size: 2.25rem; /* text-4xl */
+  font-weight: bold;
+  color:  var(--color-primary);;
+  margin-right: 0.5rem;
+}
+
+.logo_icon {
+  color:  var(--color-primary);;
+  font-size: 1.875rem; /* text-3xl */
+}
+
+.tagline {
+  font-size: 1.125rem;
+  color: var(--color-text);;
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+}
+
+@media (max-width: 640px) {
+  .logo_text {
+    font-size: 2rem; /* text-4xl */
+    text-align: center;
+  }
+  
+  .logo_icon {
+    font-size: 1.5rem; /* text-3xl */
+  }
+  
+  .tagline {
+    font-size: 1rem;
+  }
+}

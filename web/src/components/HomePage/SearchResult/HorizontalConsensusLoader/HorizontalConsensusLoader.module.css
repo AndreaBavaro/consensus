@@ -1,0 +1,232 @@
+.loaderContainer {
+  background: var(--color-background-secondary);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  margin-bottom: 24px;
+  animation: containerPulse 4s ease-in-out infinite;
+}
+
+@keyframes containerPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb), 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px 2px rgba(var(--color-primary-rgb), 0.2);
+  }
+}
+
+.loaderContainer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--color-primary-rgb), 0.3),
+    transparent
+  );
+  animation: scanline 2s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400px);
+  }
+}
+
+.mainContent {
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.titleBar {
+  height: 24px;
+  width: 60%;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  animation: titlePulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scaleX(0.97);
+    opacity: 1;
+  }
+}
+
+.subtitleBar {
+  height: 16px;
+  width: 40%;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  animation: subtitlePulse 3s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+@keyframes subtitlePulse {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scaleX(0.95);
+    opacity: 1;
+  }
+}
+
+.themeContainer {
+  display: flex;
+  gap: 24px;
+  animation: themeContainerFloat 6s ease-in-out infinite;
+}
+
+@keyframes themeContainerFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.themeItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  position: relative;
+}
+
+.themeIcon {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  animation: iconRotate 4s linear infinite;
+}
+
+@keyframes iconRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.themeIcon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from 0deg,
+    transparent,
+    rgba(var(--color-primary-rgb), 0.2),
+    transparent
+  );
+  animation: iconGlow 2s linear infinite;
+}
+
+@keyframes iconGlow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.themeContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.themeLine {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  transform-origin: left;
+}
+
+.themeLine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--color-primary-rgb), 0.2),
+    transparent
+  );
+  animation: lineShimmer 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes lineShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.glowEffect {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle at center,
+    rgba(var(--color-primary-rgb), 0.1) 0%,
+    transparent 70%
+  );
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: glowPulse 4s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1) rotate(180deg);
+  }
+}

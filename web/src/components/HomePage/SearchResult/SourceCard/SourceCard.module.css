@@ -1,0 +1,120 @@
+.card {
+  background-color: var(--color-background-secondary);;
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 280px;
+  height: 68px;
+  flex: 1;
+  position: relative;
+  cursor: pointer;
+  z-index: 1;
+  justify-content: space-between;
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.left {
+  transform-origin: left center;
+  animation-delay: calc(var(--index) * 100ms);
+}
+
+.right {
+  transform-origin: right center;
+  animation-delay: calc(var(--index) * 100ms);
+}
+
+.card:hover {
+  transform: scale(1.01);
+  z-index: 2;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.card:active {
+  transform: scale(0.95);
+}
+
+.title {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.redditIcon {
+  width: 14px;
+  height: 14px;
+  fill:  var(--color-primary);;
+}
+
+.subreddit {
+  font-size: 10px;
+  color: var(--color-text);;
+}
+
+/* Skeleton loading animation */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-background-secondary) 0%,
+    var(--color-background) 50%,
+    var(--color-background-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeletonTitle {
+  composes: skeleton;
+  width: 85%;
+  height: 16px;
+}
+
+.skeletonSubreddit {
+  composes: skeleton;
+  width: 40%;
+  height: 12px;
+}
+
+.skeletonShowMore {
+  composes: skeleton;
+  width: 60%;
+  height: 16px;
+  margin: auto;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.fadeIn {
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
