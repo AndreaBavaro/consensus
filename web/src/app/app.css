@@ -1071,7 +1071,7 @@ img {
 }
 .legend-row {
   display: grid;
-  grid-template-columns: 14px 1fr auto 46px;
+  grid-template-columns: 14px 1fr 44px 46px;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -1100,23 +1100,18 @@ button.legend-row:hover,
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.legend-row.pending {
-  grid-template-columns: 14px 1fr;
-}
 .legend-row.pending .dot {
   background: var(--line-2);
 }
 .legend-row.pending .legend-title {
   color: var(--muted);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   animation: fade 0.3s var(--ease);
 }
 .legend-row.pending.blank .dot {
   visibility: hidden;
 }
 .legend-pct {
+  text-align: right;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1221,12 +1216,32 @@ button.legend-row:hover,
 .eyebrow-pre {
   flex: none;
 }
-.theme-chip span {
+.posts-eyebrow.crumbed .eyebrow-opt {
+  flex: 0 0 auto;
+  max-width: 40%;
+}
+.crumb-sep {
+  flex: none;
+  color: var(--muted);
+  margin: 0 2px;
+}
+.crumb-theme {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: none;
+  font: 600 13px/1.2 var(--sans);
+  color: var(--ink);
 }
-.theme-chip svg {
-  flex: none;
+.posts-eyebrow .crumb-clear {
+  width: 26px;
+  height: 26px;
+  margin: -4px 0 -4px 2px;
+  color: var(--muted);
+}
+.posts-eyebrow .crumb-clear:hover {
+  color: var(--ink);
 }
 .posts-eyebrow .eyebrow-opt {
   overflow: hidden;
@@ -1504,6 +1519,9 @@ button.legend-row:hover,
   text-align: center;
   margin: 0;
 }
+.list-foot.pending {
+  visibility: hidden;
+}
 .list-foot {
   display: flex;
   align-items: center;
@@ -1669,7 +1687,7 @@ button.legend-row:hover,
   }
   .poll-viz {
     grid-template-columns: minmax(180px, 40%) 1fr;
-    align-items: center;
+    align-items: start;
   }
   .donut-wrap {
     width: 100%;
@@ -1778,6 +1796,13 @@ button.legend-row:hover,
   .poll-col {
     padding: 18px 16px 0;
   }
+  .posts-eyebrow.crumbed .eyebrow-pre {
+    display: none;
+  }
+  /* The finished meta line can wrap to two lines here; reserve both from the start. */
+  .caption {
+    min-height: 40px;
+  }
   .posts-col {
     padding: 16px 16px 32px;
   }
@@ -1790,11 +1815,8 @@ button.legend-row:hover,
     top: -4px;
     right: -6px;
   }
-  .legend-row.pending {
-    grid-template-columns: 12px 1fr;
-  }
   .legend-row {
-    grid-template-columns: 12px 1fr auto;
+    grid-template-columns: 12px 1fr 40px;
     gap: 8px;
     padding: 8px;
     font-size: 13.5px;
@@ -2461,15 +2483,25 @@ button.legend-row:hover,
   padding: 8px 10px;
   border-radius: var(--r-sm);
   text-align: left;
-  border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
 }
-.themes button:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .themes button:hover {
+    background: var(--hover);
+  }
 }
 .themes button.on {
-  border-color: var(--c);
-  background: color-mix(in srgb, var(--c) 9%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--c);
+}
+.themes button.on .th-title {
+  font-weight: 600;
+}
+.themes button.on .th-n {
+  color: var(--ink);
+}
+.themes button:focus:not(:focus-visible) {
+  outline: none;
 }
 .th-top {
   display: flex;
@@ -2500,23 +2532,4 @@ button.legend-row:hover,
   border-radius: 2px;
   background: var(--c);
   opacity: 0.75;
-}
-.theme-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: none;
-  color: var(--ink);
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 50%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }

@@ -137,6 +137,30 @@ function Legend({ options, selected, onSelect, live, hovered, onHover }: { optio
   );
 }
 
+/**
+ * Keeps a box at the tallest height it has reached, so late data (an option dropped at the end, a shorter
+ * summary) never pulls content up. A user action (new `reset` value) lets it size freely again.
+ */
+function useNoShrink<T extends HTMLElement>(reset?: unknown) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    el.style.minHeight = '';
+    let max = 0;
+    const ro = new ResizeObserver(() => {
+      const h = el.getBoundingClientRect().height;
+      if (h > max + 0.5) {
+        max = h;
+        el.style.minHeight = `${h}px`;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [reset]);
+  return ref;
+}
+
 function LegendPending({ titles }: { titles: string[] }) {
   // Reserve at least 4 rows so the column keeps its height until the real options arrive.
   const rows = [...titles, ...Array(Math.max(0, 4 - titles.length)).fill('')] as string[];
@@ -146,6 +170,8 @@ function LegendPending({ titles }: { titles: string[] }) {
         <div key={i} className={`legend-row pending ${t ? '' : 'blank'}`}>
           <span className="dot" />
           <span className="legend-title">{t || '\u00a0'}</span>
+          <span className="legend-pct" />
+          <span className="legend-count" />
         </div>
       ))}
     </div>
@@ -153,10 +179,11 @@ function LegendPending({ titles }: { titles: string[] }) {
 }
 
 /** Themes behind the selected answer: specific arguments, ranked by how many of its voters make them. */
-function Themes({ themes, option, active, onPick }: { themes: Theme[]; option: PollOption | undefined; active: string | null; onPick: (id: string | null) => void }) {
+function Themes({ themes, option, posts, active, onPick }: { themes: Theme[]; option: PollOption | undefined; posts: Record<string, Post>; active: string | null; onPick: (id: string | null) => void }) {
   if (!option) return null;
+  // Counted from the loaded posts, the same set the list filters on, so a row's count always equals the list it opens.
   const rows = themes
-    .map((t) => ({ t, n: t.by_option?.[option.id] ?? 0 }))
+    .map((t) => ({ t, n: t.post_ids.reduce((a, id) => a + (posts[id]?.option === option.id ? 1 : 0), 0) }))
     .filter((r) => r.n > 0)
     .sort((a, b) => b.n - a.n)
     .slice(0, 6);
@@ -295,12 +322,19 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
   const [themeId, setThemeId] = useState<string | null>(null);
   const [copied, copy] = useCopy();
   const listTop = useRef<HTMLDivElement>(null);
+  const streamOrder = useRef<{ key: string; ids: string[] }>({ key: '', ids: [] });
 
   const poll = state.poll;
   // Hide an empty "Other" row once results are in; it only adds noise.
-  const options = (poll?.options ?? []).filter((o) => !(o.is_other && o.count === 0 && poll?.final));
+  const rawOptions = (poll?.options ?? []).filter((o) => !(o.is_other && o.count === 0 && poll?.final));
+  // While counts are live, rows keep the order they first appeared in so they never swap places mid-run.
+  const firstOrder = useRef<string[]>([]);
+  if (!poll?.final) for (const o of rawOptions) if (!firstOrder.current.includes(o.id)) firstOrder.current.push(o.id);
+  const options = poll?.final ? rawOptions : [...rawOptions].sort((a, b) => firstOrder.current.indexOf(a.id) - firstOrder.current.indexOf(b.id));
   const selected = picked && options.some((o) => o.id === picked) ? picked : options.find((o) => o.count > 0)?.id ?? options[0]?.id ?? null;
   const option = options.find((o) => o.id === selected);
+  const legendBox = useNoShrink<HTMLDivElement>(picked);
+  const whyBox = useNoShrink<HTMLDivElement>(picked);
   const leadsOn = showLeads(state);
   const running = state.phase === 'connecting' || state.phase === 'streaming';
 
@@ -328,8 +362,17 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
 
   const pageSize = tab === 'leads' && desktop ? 25 : 20;
   const pages = Math.max(1, Math.ceil(list.length / pageSize));
-  const cur = Math.min(page, pages);
-  const shown = list.slice((cur - 1) * pageSize, cur * pageSize);
+  const cur = running ? 1 : Math.min(page, pages);
+  const listKey = `${tab}-${selected}-${sort}-${intent}-${themeId}-${cur}`;
+  let shown = list.slice((cur - 1) * pageSize, cur * pageSize);
+  if (running) {
+    // While posts stream in, rows on screen stay put and new ones only append; the final order lands once at the end.
+    const prev = streamOrder.current.key === listKey ? streamOrder.current.ids : [];
+    const byId = new Map(list.map((p) => [p.id, p]));
+    const had = new Set(prev);
+    shown = [...prev.flatMap((id) => byId.get(id) ?? []), ...list.filter((p) => !had.has(p.id))].slice(0, pageSize);
+    streamOrder.current = { key: listKey, ids: shown.map((p) => p.id) };
+  }
   const go = (p: number) => {
     setPage(p);
     const el = listTop.current;
@@ -417,6 +460,8 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
   const live = !!poll && !poll.final;
   const loadingPosts = running && shown.length === 0;
   const hasPoll = !!poll && poll.total_opinions > 0;
+  // One column: the legend can still grow when the final poll lands, so nothing sits under it until the run is done.
+  const deferPosts = running && !desktop;
 
   return (
     <div className="results">
@@ -427,6 +472,34 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
         </div>
         <h1 className="q-title">{title}</h1>
         <Caption state={state} />
+        <div className="poll-viz">
+          <div className="donut-wrap">
+            {poll && poll.total_opinions > 0 ? (
+              <Donut slices={options} total={poll.total_opinions} selected={selected} onSelect={select} hovered={hovered} onHover={setHovered} label="opinions" />
+            ) : (
+              <DonutSkeleton found={state.progress?.pool ?? 0} label={state.progress?.pool ? 'posts' : 'searching'} />
+            )}
+          </div>
+          <div className="legend-box" ref={legendBox}>
+            {hasPoll ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
+          </div>
+        </div>
+        {!deferPosts && (
+          <div ref={whyBox}>
+            <Why option={hasPoll ? option : undefined} summary={hasPoll && selected ? state.reasons[selected]?.summary : undefined} pending={!hasPoll} />
+          </div>
+        )}
+        {state.done && poll?.other_breakdown && poll.other_breakdown.length > 0 && (
+          <p className="also-mentioned">
+            <span className="muted">Also mentioned in Other: </span>
+            {poll.other_breakdown.slice(0, 6).map((b, i) => (
+              <span key={b.title}>
+                {i > 0 && ', '}
+                {b.title} <span className="muted">({num(b.count)})</span>
+              </span>
+            ))}
+          </p>
+        )}
         {isThin(state) && (
           <p className="thin-note" role="note">
             {onWiden ? 'Not much data for this question in this time range.' : 'Not much data for this question, so treat the split as a rough read.'}
@@ -437,30 +510,9 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
             )}
           </p>
         )}
-        <div className="poll-viz">
-          <div className="donut-wrap">
-            {poll && poll.total_opinions > 0 ? (
-              <Donut slices={options} total={poll.total_opinions} selected={selected} onSelect={select} hovered={hovered} onHover={setHovered} label="opinions" />
-            ) : (
-              <DonutSkeleton found={state.progress?.pool ?? 0} label={state.progress?.pool ? 'posts' : 'searching'} />
-            )}
-          </div>
-          {poll && poll.total_opinions > 0 ? <Legend options={options} selected={selected} onSelect={select} live={live} hovered={hovered} onHover={setHovered} /> : <LegendPending titles={state.options.map((o) => o.title)} />}
-          {!live && poll?.other_breakdown && poll.other_breakdown.length > 0 && (
-            <p className="also-mentioned">
-              <span className="muted">Also mentioned in Other: </span>
-              {poll.other_breakdown.slice(0, 6).map((b, i) => (
-                <span key={b.title}>
-                  {i > 0 && ', '}
-                  {b.title} <span className="muted">({num(b.count)})</span>
-                </span>
-              ))}
-            </p>
-          )}
-        </div>
-        <Why option={hasPoll ? option : undefined} summary={hasPoll && selected ? state.reasons[selected]?.summary : undefined} pending={!hasPoll} />
         <Themes
-          themes={state.themes}
+          themes={state.done ? state.themes : []}
+          posts={state.posts}
           option={poll && poll.total_opinions > 0 ? option : undefined}
           active={themeId}
           onPick={(id) => {
@@ -472,80 +524,87 @@ export function Results({ state, query, retry, onWiden, tools }: { state: Search
         />
       </aside>
 
-      <section className="posts-col" ref={listTop}>
-        <div className="eyebrow posts-eyebrow">
-          {tab === 'leads' ? 'Leads' : option ? (
-            <>
-              <span className="eyebrow-pre">Posts saying</span>
-              <span style={{ color: optionColor(option.id) }} className="eyebrow-opt">
-                {option.title}
-              </span>
-              {theme && (
-                <button type="button" className="theme-chip" onClick={() => (setThemeId(null), setPage(1))} aria-label={`Clear filter: ${theme.title}`} data-tip="Clear filter">
-                  <span>{theme.title}</span>
-                  <XIcon size={12} />
+      {deferPosts ? null : (
+        <section className="posts-col" key="posts" ref={listTop}>
+          <div className={`eyebrow posts-eyebrow ${theme ? 'crumbed' : ''}`}>
+            {tab === 'leads' ? 'Leads' : option ? (
+              <>
+                <span className="eyebrow-pre">Posts saying</span>
+                <span style={{ color: optionColor(option.id) }} className="eyebrow-opt">
+                  {option.title}
+                </span>
+                {theme && (
+                  <>
+                    <ChevronRight size={13} className="crumb-sep" aria-hidden="true" />
+                    <span className="crumb-theme" title={theme.title}>
+                      {theme.title}
+                    </span>
+                    <button type="button" className="icon-btn crumb-clear" onClick={() => (setThemeId(null), setPage(1))} aria-label={`Clear filter: ${theme.title}`} data-tip="Clear filter">
+                      <XIcon size={14} />
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              'Posts'
+            )}
+          </div>
+          <div className="toolbar">
+            <div className="segmented" role="tablist">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  aria-label={`${t.name}${t.count == null ? '' : `, ${t.count}`}`}
+                  data-tip={t.label ? undefined : t.name}
+                  className={`${tab === t.id ? 'on' : ''} seg-${t.id}`}
+                  onClick={() => (setTab(t.id), setPage(1))}
+                >
+                  {t.icon && <span className="seg-ic">{t.icon}</span>}
+                  {t.label && <span className="seg-label">{t.label}</span>}
+                  <span className="seg-count">{t.count == null ? '–' : num(t.count)}</span>
                 </button>
-              )}
-            </>
-          ) : (
-            'Posts'
-          )}
-        </div>
-        <div className="toolbar">
-          <div className="segmented" role="tablist">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={tab === t.id}
-                aria-label={`${t.name}${t.count == null ? '' : `, ${t.count}`}`}
-                data-tip={t.label ? undefined : t.name}
-                className={`${tab === t.id ? 'on' : ''} seg-${t.id}`}
-                onClick={() => (setTab(t.id), setPage(1))}
-              >
-                {t.icon && <span className="seg-ic">{t.icon}</span>}
-                {t.label && <span className="seg-label">{t.label}</span>}
-                <span className="seg-count">{t.count == null ? '–' : num(t.count)}</span>
+              ))}
+            </div>
+            <SortMenu value={sort} onChange={(s) => (setSort(s), setPage(1))} />
+          </div>
+
+          {tab === 'leads' && (
+            <div className="intent-chips">
+              <button className={`ichip ${!intent ? 'on' : ''}`} onClick={() => (setIntent(null), setPage(1))}>
+                All <span>{num(leads.length)}</span>
               </button>
-            ))}
-          </div>
-          <SortMenu value={sort} onChange={(s) => (setSort(s), setPage(1))} />
-        </div>
-
-        {tab === 'leads' && (
-          <div className="intent-chips">
-            <button className={`ichip ${!intent ? 'on' : ''}`} onClick={() => (setIntent(null), setPage(1))}>
-              All <span>{num(leads.length)}</span>
-            </button>
-            {INTENT_ORDER.map((k) => {
-              const n = poll?.leads[k] ?? 0;
-              if (!n) return null;
-              return (
-                <button key={k} className={`ichip ${intent === k ? 'on' : ''}`} style={{ ['--c' as string]: INTENT_META[k].color }} onClick={() => (setIntent(intent === k ? null : k), setPage(1))}>
-                  <i /> {INTENT_META[k].label} <span>{num(n)}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className={`post-list ${running ? 'streaming' : ''}`} key={`${tab}-${selected}-${sort}-${intent}-${themeId}-${cur}`}>
-          {loadingPosts ? (
-            <ListWait state={state} />
-          ) : tab === 'leads' && desktop ? (
-            <LeadsTable posts={shown} communities={state.communities} authors={state.authors} copied={copied} onCopy={onCopy} />
-          ) : shown.length ? (
-            shown.map((p) => <PostRow key={p.id} post={p} community={p.community ? state.communities[p.community] : undefined} lead={tab === 'leads'} copied={copied === p.id} onCopy={onCopy} />)
-          ) : (
-            <p className="list-empty">No {tab === 'all' ? '' : tab === 'leads' ? 'leads' : tab === 'x' ? 'X ' : 'Reddit '}posts for this answer yet.</p>
+              {INTENT_ORDER.map((k) => {
+                const n = poll?.leads[k] ?? 0;
+                if (!n) return null;
+                return (
+                  <button key={k} className={`ichip ${intent === k ? 'on' : ''}`} style={{ ['--c' as string]: INTENT_META[k].color }} onClick={() => (setIntent(intent === k ? null : k), setPage(1))}>
+                    <i /> {INTENT_META[k].label} <span>{num(n)}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
-        </div>
 
-        <div className="list-foot">
-          <span className="muted">{list.length ? `Showing ${num((cur - 1) * pageSize + 1)}–${num((cur - 1) * pageSize + shown.length)} of ${num(list.length)}` : ' '}</span>
-          <Pager page={cur} pages={pages} onPage={go} />
-        </div>
-      </section>
+          <div className={`post-list ${running ? 'streaming' : ''}`} key={`${listKey}-${running ? 'live' : 'final'}`}>
+            {loadingPosts ? (
+              <ListWait state={state} />
+            ) : tab === 'leads' && desktop ? (
+              <LeadsTable posts={shown} communities={state.communities} authors={state.authors} copied={copied} onCopy={onCopy} />
+            ) : shown.length ? (
+              shown.map((p) => <PostRow key={p.id} post={p} community={p.community ? state.communities[p.community] : undefined} lead={tab === 'leads'} copied={copied === p.id} onCopy={onCopy} />)
+            ) : (
+              <p className="list-empty">No {tab === 'all' ? '' : tab === 'leads' ? 'leads' : tab === 'x' ? 'X ' : 'Reddit '}posts for this answer yet.</p>
+            )}
+          </div>
+
+          <div className={`list-foot ${running ? 'pending' : ''}`}>
+            <span className="muted">{list.length ? `Showing ${num((cur - 1) * pageSize + 1)}–${num((cur - 1) * pageSize + shown.length)} of ${num(list.length)}` : ' '}</span>
+            <Pager page={cur} pages={pages} onPage={go} />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
