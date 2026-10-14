@@ -150,3 +150,10 @@ test("incident table names every code in words and shows what people tried", asy
   assert.match(md, /\| Step \| What went wrong \| Threads \| Posts \| Last 24 months \| Worked \| Tried \|/);
   assert.match(md, /\| First AIMA residence appointment \| no response from the office \| 1 \| 1 \| 1 \| lawyer \(1\) \| lawyer \(1\) \|/);
 });
+
+test("every problem and fix code has words in the export", async () => {
+  const { WHAT, FIX } = await import("../src/np/extract.ts");
+  const { WHAT_LABEL, FIX_LABEL } = await import("../src/np/export.ts");
+  assert.deepEqual(WHAT.filter((c) => !WHAT_LABEL[c]), []);
+  assert.deepEqual(FIX.filter((c) => !FIX_LABEL[c]), []);
+});
