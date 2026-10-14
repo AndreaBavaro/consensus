@@ -191,10 +191,13 @@ export interface FetchedThread {
 }
 
 /** One thread with its whole comment tree (Reddit nests replies in the same response), tagged with depth. */
+/** Marks a listing served from the opt-in local thread cache (src/np/cache.ts): it did not go through the proxy. */
+export const CACHED = Symbol("cached");
+
 /** Adds a proxied response's size to the run's meter (decoded JSON bytes; the proxy bills transfer, so this is an estimate). */
 const meterBytes = (raw: unknown) => {
   const m = meter();
-  if (m && raw) m.oxylabsBytes += Buffer.byteLength(JSON.stringify(raw));
+  if (m && raw && !(raw as Record<symbol, unknown>)[CACHED]) m.oxylabsBytes += Buffer.byteLength(JSON.stringify(raw));
 };
 
 export async function fetchThread(id: string, window: { sinceEpoch: number; untilEpoch: number }, fetchListing: (id: string) => Promise<unknown> = fetchPostListing): Promise<FetchedThread | null> {

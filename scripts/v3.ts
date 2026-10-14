@@ -4,6 +4,9 @@
  *   npm run v3 -- --batch=questions.txt --out-dir=runs/x [--concurrency=3]   (one question per line, "q | since")
  * New Postcode research (see src/v3/profile.ts): --profile=newpostcode (or CONSENSUS_PROFILE=newpostcode) and
  *   --store=links|full (links-only saves no post text; default full, links under the profile).
+ *   --budget-usd=N, --subs=a,b, --deny-subs=c,d, --lang=it,pt, --research (batch rules without the profile).
+ *   --seen=state.json [--family=name] [--since-last]   count only opinions not counted before; adds a diff event.
+ *   --cache-dir=.np-cache --cache-ttl-days=N   opt-in thread cache (stores post text locally); --purge-cache empties it.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { runV3 } from "../src/v3/run.ts";
@@ -11,6 +14,8 @@ import { profileRequest, resolveProfile } from "../src/v3/profile.ts";
 import { saveRun } from "../src/np/links.ts";
 import { runResearchBatch } from "../src/np/batch.ts";
 import { addQuotes } from "../src/np/quotes.ts";
+import { diffAgainst, familyOf, loadState, recordRun, saveState, sinceLast, skipIdsFor } from "../src/np/seen.ts";
+import { cachedDeps, purgeCache } from "../src/np/cache.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")) as [string, string][]);
@@ -21,13 +26,34 @@ const sources = (args.sources ?? (profile.research ? "reddit" : "reddit,x")).spl
 /** Today's file formats are kept unless a profile or --store asks for the research writer. */
 const researchWriter = profile.name !== "default" || args.store !== undefined;
 
+if ("purge-cache" in args) {
+  const dir = args["cache-dir"] ?? ".np-cache";
+  console.log(`purged ${await purgeCache(dir)} cached threads from ${dir}`);
+  process.exit(0);
+}
+if (args["cache-dir"] && !args["cache-ttl-days"]) throw new Error("--cache-dir needs --cache-ttl-days=N (the cache stores post text locally; choose how long)");
+const deps = args["cache-dir"] ? cachedDeps(args["cache-dir"], Number(args["cache-ttl-days"])) : {};
+const state = args.seen ? await loadState(args.seen) : null;
+const family = (q: string) => args.family ?? familyOf(q);
+/** --seen: skip opinions counted before; --since-last: start where the family's last run did. */
+const seenRequest = (q: string): { skipIds?: string[]; since?: string } =>
+  state ? { skipIds: [...skipIdsFor(state, family(q))], ...("since-last" in args && sinceLast(state, family(q)) ? { since: sinceLast(state, family(q)) } : {}) } : {};
+/** Appends the diff against the family's previous run and records this run in the state file. */
+async function afterSeen(q: string, events: { event: string; data: any }[]) {
+  if (!state) return;
+  events.push({ event: "diff", data: diffAgainst(state, family(q), events) });
+  recordRun(state, family(q), events);
+  await saveState(args.seen!, state);
+}
+
 async function one(query: string, since?: string, until?: string, quiet = false) {
   const t0 = Date.now();
   const at = () => `${((Date.now() - t0) / 1000).toFixed(1).padStart(5)}s`;
   const events: (V3Event & { t: number })[] = [];
   let posts = 0;
   let lastProgress = 0;
-  for await (const e of runV3({ query, since, until, sources, ...profileRequest(profile), ...(args["budget-usd"] !== undefined && !args.batch ? { budgetUsd: Number(args["budget-usd"]) } : {}) })) {
+  const seenReq = seenRequest(query);
+  for await (const e of runV3({ ...seenReq, query, since: since ?? seenReq.since, until, sources, ...profileRequest(profile), ...(args["budget-usd"] !== undefined && !args.batch ? { budgetUsd: Number(args["budget-usd"]) } : {}) }, deps)) {
     events.push({ ...e, t: Date.now() - t0 });
     const d = e.data as any;
     if (quiet) continue;
@@ -58,8 +84,13 @@ if (args.batch && profile.research) {
     store: profile.store,
     sources: args.sources ? sources : ["reddit"],
     request: profileRequest(profile),
-    run: (req) => runV3(req),
-    afterRun: profile.tags && profile.quotesPerOption > 0 ? ({ line, events }) => addQuotes(line.query, events, profile.quotesPerOption) : undefined,
+    requestFor: (line) => seenRequest(line.query),
+    run: (req) => runV3(req, deps),
+    afterRun: async ({ line, events }) => {
+      const usd = profile.tags && profile.quotesPerOption > 0 ? await addQuotes(line.query, events, profile.quotesPerOption) : 0;
+      await afterSeen(line.query, events);
+      return usd;
+    },
     log: (l) => console.log(l),
   });
   console.log(`spent $${r.spent.toFixed(4)}${r.stopped ? ` (stopped: ${r.stopped})` : ""}, ${r.rows.length} run, ${r.skipped.length} skipped`);
@@ -106,6 +137,9 @@ if (args.batch && profile.research) {
     const usd = await addQuotes(r.query, events, profile.quotesPerOption);
     console.log(`quote bank: ${(events.at(-1)!.data as any).rows.length} rows, $${usd} for paraphrases`);
   }
+  await afterSeen(r.query, events);
+  const diff = events.find((e) => e.event === "diff")?.data as any;
+  if (diff) console.log(`diff vs ${diff.previous_date}: ${diff.options.map((o: any) => `${o.title} ${o.share}%${o.change === null ? " (new)" : ` (${o.change >= 0 ? "+" : ""}${o.change})`}`).join(" | ")}`);
   if (args.out && researchWriter) await saveRun(args.out, { query: r.query, since: r.since, until: args.until, events }, profile.store);
   else if (args.out) await writeFile(args.out, JSON.stringify(events, null, 1));
 }

@@ -168,9 +168,12 @@ export interface SearchRequest {
   lang?: string[];
   /** Research runs: skip author profiles, subreddit icons and the "best X" pick tally; report proxy traffic in done.cost. */
   lean?: boolean;
+  /** Incremental research (--seen): post ids already counted in earlier runs; they stay in the pool but are not sorted or counted. */
+  skipIds?: string[];
 }
 
 export interface V3Event {
-  event: "meta" | "plan" | "progress" | "posts" | "poll" | "reasons" | "themes" | "authors" | "communities" | "done" | "error";
+  /** "quotes" and "diff" are added to saved research runs by the CLI after the stream ends; runV3 never emits them. */
+  event: "meta" | "plan" | "progress" | "posts" | "poll" | "reasons" | "themes" | "authors" | "communities" | "done" | "error" | "quotes" | "diff";
   data: unknown;
 }

@@ -173,6 +173,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   const dropped = { duplicate: 0, author_cap: 0, prefiltered: 0 };
   const perSource: Record<V3Source, number> = { reddit: 0, x: 0 };
   let pending: RawPost[] = [];
+  const skip = req.skipIds?.length ? new Set(req.skipIds) : null;
+  let seenSkipped = 0;
   let kickSort: () => void = () => {};
 
   /** Dedupe by id and by text (copy-paste bots), cap any one author at 5% of the pool (min 3, as in the backtest). */
@@ -205,7 +207,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
       pool.push(p);
       arrivedAt.set(p.id, elapsed());
       perSource[p.source]++;
-      pending.push(p);
+      if (skip?.has(p.id)) seenSkipped++;
+      else pending.push(p);
     }
     kickSort();
   };
@@ -747,6 +750,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
         calls: { llm: m.llmCalls, llm_failed: m.llmFailed, x: m.xCalls, x_retries: m.xRetries, x_failed: m.xFailed, serper: m.serperCalls, reddit_threads: m.redditFetches, reddit_failed: m.redditFailed },
         models: { options: optionsModel(), sort: sortModel(), reasons: reasonsModel() },
         coverage: pool.length ? Math.round((sortedCount / pool.length) * 1000) / 10 : 0,
+        ...(req.skipIds ? { seen: { skipped: seenSkipped } } : {}),
         ...(debugPool ? { debug: { discarded } } : {}),
       },
     });

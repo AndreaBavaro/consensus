@@ -74,3 +74,16 @@ test("afterRun spend counts toward the budget and its events are saved", async (
   assert.equal(seen.length, 1, "second search: spent 0.03 + max 0.03 > 0.05");
   assert.ok(readFileSync(join(dir, r.rows[0]!.file), "utf8").includes('"quotes"'));
 });
+
+test("requestFor adds per-question request fields (seen ids, since-last); a line's own since wins", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "np-batch-"));
+  const seen: SearchRequest[] = [];
+  await runResearchBatch({
+    lines: ["q one", "q two | 2024-01-01"],
+    outDir: dir,
+    store: "links",
+    run: fakeRun(0.01, seen),
+    requestFor: (line) => ({ skipIds: [`seen-${line.query}`], since: "2026-09-14" }),
+  });
+  assert.deepEqual(seen.map((s) => [s.skipIds, s.since]), [[["seen-q one"], "2026-09-14"], [["seen-q two"], "2024-01-01"]]);
+});

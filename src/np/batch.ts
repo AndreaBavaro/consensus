@@ -59,6 +59,8 @@ export interface BatchOptions {
   run: (req: SearchRequest) => AsyncIterable<V3Event>;
   /** Extra request fields every search gets (profile settings). */
   request?: Partial<SearchRequest>;
+  /** Per-question request fields (seen ids, since-last); the line's own since/until win. */
+  requestFor?: (line: BatchLine) => Partial<SearchRequest>;
   /** Called with each finished run before it is saved (quote paraphrases, seen-state updates); may push events and returns any extra USD it spent. */
   afterRun?: (run: { line: BatchLine; events: (V3Event & { t_ms: number })[] }) => Promise<number | void>;
   log?: (s: string) => void;
@@ -88,7 +90,8 @@ export async function runResearchBatch(o: BatchOptions): Promise<{ rows: Manifes
     }
     const t0 = Date.now();
     const events: (V3Event & { t_ms: number })[] = [];
-    const req: SearchRequest = { ...o.request, query: line.query, since: line.since, until: line.until, sources: o.sources ?? o.request?.sources ?? ["reddit"], ...(o.budgetUsd !== undefined ? { budgetUsd: o.budgetUsd - spent } : {}) };
+    const per = o.requestFor?.(line) ?? {};
+    const req: SearchRequest = { ...o.request, ...per, query: line.query, since: line.since ?? per.since, until: line.until ?? per.until, sources: o.sources ?? o.request?.sources ?? ["reddit"], ...(o.budgetUsd !== undefined ? { budgetUsd: o.budgetUsd - spent } : {}) };
     for await (const e of o.run(req)) events.push({ ...e, t_ms: Date.now() - t0 });
     const d = events.find((e) => e.event === "done")?.data as any;
     const poll = [...events].reverse().find((e) => e.event === "poll")?.data as any;
