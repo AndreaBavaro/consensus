@@ -35,6 +35,36 @@ npm run build
 
 You need keys for OpenRouter (LLMs), TwitterAPI.io (X), Serper (Google search) and Oxylabs (residential proxy for Reddit). To sign people in, point `FIREBASE_PROJECT_ID` and the `VITE_FIREBASE_*` values at your own Firebase project.
 
+## MCP: use Consensus from Claude Code, Cursor, Claude Desktop (`mcp/`)
+
+`mcp/server.ts` is a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Any MCP client can then ask "what do people on Reddit and X think about X" and get the poll with linked quotes.
+
+Tools:
+
+- `consensus_get(id)` replays a saved search from useconsensus.io (the `id=` in a result URL). Free, no keys.
+- `consensus_featured()` lists the polls on the home page with their leading answer and id. Free, no keys.
+
+Run it:
+
+```bash
+npm run mcp            # same as: npx tsx mcp/server.ts
+```
+
+Add it to a client (use the absolute path of this checkout):
+
+```bash
+# Claude Code
+claude mcp add consensus -- npx -y tsx /ABS/PATH/consensus/mcp/server.ts
+```
+
+```json
+// Cursor: ~/.cursor/mcp.json (or .cursor/mcp.json in a project)
+// VS Code: .vscode/mcp.json        Claude Desktop: claude_desktop_config.json
+{ "mcpServers": { "consensus": { "command": "npx", "args": ["-y", "tsx", "/ABS/PATH/consensus/mcp/server.ts"] } } }
+```
+
+Try it with the inspector: `npx @modelcontextprotocol/inspector npx tsx mcp/server.ts`, then call `consensus_get` with `ByAYXunnmt6BGCQR`.
+
 ## Limits and abuse guards
 
 Each visitor can run one search at a time. Per-IP hourly rate limits, a daily spend cap (`DAILY_SPEND_CAP_USD`) and a global X request budget (`X_GLOBAL_RPS`) keep load and cost bounded. These are tunable through the environment variables in `.env.example` and the constants at the top of each `src/v3` file.

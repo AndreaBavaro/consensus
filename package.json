@@ -15,13 +15,15 @@
     "web": "vite",
     "build": "tsc --noEmit && tsc --noEmit -p web && vite build",
     "eval": "tsx --env-file=.env scripts/eval.ts",
-    "audit": "tsx --env-file=.env scripts/audit.ts"
+    "audit": "tsx --env-file=.env scripts/audit.ts",
+    "mcp": "tsx mcp/server.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-brands-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@netlify/blobs": "^10.7.13",
     "firebase": "^12.19.0",
     "jose": "^6.2.12",
