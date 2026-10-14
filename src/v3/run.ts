@@ -153,7 +153,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   let budgetStop = false;
   const overBudget = () => {
     if (req.budgetUsd === undefined || budgetStop) return budgetStop;
-    if (m.llmUsd + m.xUsd + m.serperCredits * 0.001 + (proxyCost(m).oxylabs_usd ?? 0) >= req.budgetUsd) {
+    // 10% is held back for calls already in flight and the quote paraphrases that follow the run.
+    if (m.llmUsd + m.xUsd + m.serperCredits * 0.001 + (proxyCost(m).oxylabs_usd ?? 0) >= req.budgetUsd * 0.9) {
       budgetStop = true;
       log.warn("budget reached; finishing with what is in", { budget_usd: req.budgetUsd });
       abort.abort();
