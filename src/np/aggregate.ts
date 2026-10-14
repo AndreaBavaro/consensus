@@ -18,16 +18,17 @@ export function aggregate(records: ExtractRecord[], o: { now?: number } = {}) {
   const now = o.now ?? Date.now();
   const recent = (r: ExtractRecord) => !!r.created_at && now - Date.parse(r.created_at) <= RECENT_MS;
 
-  const inc = new Map<string, { country: string; step: string; what: string; threads: Set<string>; posts: number; recent_posts: number; fixes: Record<string, number>; links: string[] }>();
+  const inc = new Map<string, { country: string; step: string; what: string; threads: Set<string>; posts: number; recent_posts: number; fixes: Record<string, number>; tried: Record<string, number>; links: string[] }>();
   for (const r of records)
     for (const i of r.incidents) {
       const country = i.step.includes(":") ? i.step.split(":")[0]!.toUpperCase() : r.country;
       const k = `${country}|${i.step}|${i.what}`;
-      const e = inc.get(k) ?? inc.set(k, { country, step: i.step, what: i.what, threads: new Set(), posts: 0, recent_posts: 0, fixes: {}, links: [] }).get(k)!;
+      const e = inc.get(k) ?? inc.set(k, { country, step: i.step, what: i.what, threads: new Set(), posts: 0, recent_posts: 0, fixes: {}, tried: {}, links: [] }).get(k)!;
       e.threads.add(r.thread_url ?? r.url);
       e.posts++;
       if (recent(r)) e.recent_posts++;
       bump(e.fixes, i.fix);
+      for (const t of i.tried ?? []) bump(e.tried, t);
       if (e.links.length < LINKS && !e.links.includes(r.url)) e.links.push(r.url);
     }
   const incidents = [...inc.values()]
@@ -40,7 +41,10 @@ export function aggregate(records: ExtractRecord[], o: { now?: number } = {}) {
       threads: e.threads.size,
       posts: e.posts,
       recent_posts: e.recent_posts,
+      /** What finally worked, per the posters. */
       fixes: Object.entries(e.fixes).map(([fix, posts]) => ({ fix, posts })).sort((a, b) => b.posts - a.posts),
+      /** Everything people tried, worked or not. */
+      tried: Object.entries(e.tried).map(([fix, posts]) => ({ fix, posts })).sort((a, b) => b.posts - a.posts),
       links: e.links,
     }))
     .sort((a, b) => b.threads - a.threads || b.posts - a.posts);

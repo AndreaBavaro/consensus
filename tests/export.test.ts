@@ -105,7 +105,7 @@ const extractRun = {
         records: [1, 2].map((i) => ({
           v: 1, post_id: `t1_${i}`, url: url(i), thread_url: `https://www.reddit.com/r/PortugalExpats/comments/t${i}/x/`, community: "r/PortugalExpats", created_at: "2026-01-01T00:00:00Z", score: 3, handle: `u${i}`, country: "PT", phase: "Y", firsthand: "S",
           who: { household: "couple", partner_non_eu: null, passports: ["CA"], income: "remote_na", route: "d7", consulate: "toronto", region: null },
-          incidents: [{ step: "pt:aima", what: "long_wait", outcome: "resolved", fix: "lawyer", found_out: "at_office", gist: `Waited most of a year for AIMA; a lawyer got the slot (${i}).` }],
+          incidents: [{ step: "pt:aima-first", what: "long_wait", outcome: "resolved", fix: "lawyer", tried: ["lawyer"], found_out: "at_office", gist: `Waited most of a year for AIMA; a lawyer got the slot (${i}).` }],
           steps: [], triggers: [], chose: null, paid_for: [], emotion: "frustration", valence: "-", rule_dependent: true, has_fact_claim: true, grounded: 1,
         })),
       },
@@ -118,13 +118,26 @@ test("np-export: extracted experiences, draft themes without numbers, and the si
   const { exportMarkdown, sidecarFor } = await import("../src/np/export.ts");
   const md = exportMarkdown([loadRun(extractRun)], { quoteStart: 1 });
   assert.match(md, /## Extracted experiences/);
-  assert.match(md, /\| AIMA appointment and residence card \| long wait \| 2 \| 2 \| 2 \| lawyer \(2\) \|/);
+  assert.match(md, /\| First AIMA residence appointment \| long wait \| 2 \| 2 \| 2 \| lawyer \(2\) \|/);
   assert.match(md, /- Waited most of a year for AIMA; a lawyer got the slot \(1\)\. https:\/\/www\.reddit\.com/);
   const themes = md.slice(md.indexOf("## Themes for publication"), md.indexOf("##", md.indexOf("## Themes for publication") + 5));
-  assert.match(themes, /AIMA appointment and residence card: long waits\. A fix movers describe: hiring a lawyer\./);
+  assert.match(themes, /First AIMA residence appointment: long waits\. A fix movers describe: hiring a lawyer\./);
   assert.ok(!/\d/.test(themes.replace("## Themes for publication (draft, needs human wording)", "")), "themes carry no numbers");
   assert.ok(!/\b(often|most|many|majority|usually)\b/i.test(themes), "themes carry no frequency words");
   const side = sidecarFor([loadRun(extractRun)], "pt-aima", { timelineIds: [], runDate: "2026-10-14" });
   assert.equal(side.incidents[0]!.threads, 2);
   assert.ok(!JSON.stringify(side).includes("Waited most"));
+});
+
+test("themes skip 'waited' and 'other' as the fix; paid help shows unknown worth", async () => {
+  const { exportMarkdown } = await import("../src/np/export.ts");
+  const run = JSON.parse(JSON.stringify(extractRun));
+  const ex = run.events.find((e: any) => e.event === "extract").data;
+  ex.records[0].incidents[0].fix = "waited";
+  ex.records[1].incidents[0].fix = "waited";
+  ex.records[0].paid_for = [{ what: "lawyer", worth: "?" }];
+  const md = exportMarkdown([loadRun(run)], { quoteStart: 1 });
+  assert.match(md, /First AIMA residence appointment: long waits\.\n/);
+  assert.ok(!md.includes("waiting it out"));
+  assert.match(md, /lawyer \(1; worth it \+ 0 \/ - 0 \/ ~ 0 \/ unknown 1\)/);
 });

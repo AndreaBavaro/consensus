@@ -9,9 +9,9 @@ import { CODEBOOK } from "./codebook.ts";
 import { checkParaphrase } from "./quotes.ts";
 import type { Post } from "../v3/types.ts";
 
-const WHAT = ["wrong_order", "missed_deadline", "wrong_document", "no_appointment", "long_wait", "refused_by_office", "inconsistent_officials", "lost_status_while_waiting", "unexpected_cost", "account_frozen", "coverage_gap", "scam", "misread_rule", "other"] as const;
+const WHAT = ["wrong_order", "missed_deadline", "wrong_document", "no_appointment", "long_wait", "no_response", "refused_by_office", "inconsistent_officials", "lost_status_while_waiting", "status_reversed", "card_not_delivered", "cannot_travel", "portal_error", "unexpected_cost", "paid_help_failed", "account_frozen", "coverage_gap", "scam", "misread_rule", "other"] as const;
 const OUTCOME = ["delay", "money_lost", "refused", "had_to_redo", "stuck", "resolved", "-"] as const;
-const FIX = ["lawyer", "agency_fixer", "went_in_person", "other_office", "called_or_emailed_repeatedly", "booked_before_flying", "used_receipt", "escalated_complaint", "changed_route", "waited", "local_help", "online_portal", "paid_private", "other"] as const;
+const FIX = ["lawyer", "agency_fixer", "went_in_person", "other_office", "called_or_emailed_repeatedly", "booked_before_flying", "used_receipt", "escalated_complaint", "ombudsman", "appeal", "court_action", "tacit_approval", "resubmitted", "changed_route", "waited", "local_help", "online_portal", "paid_private", "other"] as const;
 const FOUND_OUT = ["before", "at_office", "after", "-"] as const;
 const TRIGGERS = ["cost_of_living_ca", "housing_ca", "winters", "politics", "career", "family_ties", "heritage_citizenship", "lifestyle", "healthcare", "retirement", "remote_work", "adventure", "safety", "kids_education"] as const;
 const CRITERIA = ["cost", "climate", "language", "healthcare", "taxes", "visa_ease", "family", "safety", "lifestyle", "jobs", "english", "community"] as const;
@@ -19,7 +19,7 @@ const PAID = ["lawyer", "relocation_agent", "accountant_xborder", "translator", 
 const WORTH = ["+", "-", "~", "?"] as const;
 const HOUSEHOLD = ["solo", "couple", "family_kids", "retiree", "-"] as const;
 const INCOME = ["remote_na", "local_job", "pension", "passive", "student", "-"] as const;
-const ROUTE = ["citizenship_descent", "eu_family", "digital_nomad", "elective_residence", "d7", "d8", "non_lucrative", "visitor", "work_permit", "critical_skills", "stamp_1g", "student", "youth_mobility", "-"] as const;
+const ROUTE = ["citizenship_descent", "eu_family", "family_reunification", "golden_visa", "digital_nomad", "elective_residence", "d6", "d7", "d8", "non_lucrative", "visitor", "work_permit", "critical_skills", "stamp_1g", "student", "youth_mobility", "-"] as const;
 const CONSULATE = ["toronto", "montreal", "vancouver", "ottawa", "other", "-"] as const;
 const PASSPORTS = ["CA", "US", "EU_IT", "EU_IE", "EU_PT", "EU_ES", "EU_FR", "EU_OT", "UK", "OT"] as const;
 const EMOTION = ["relief", "frustration", "anxiety", "regret", "joy", "isolation", "neutral"] as const;
@@ -31,14 +31,18 @@ export interface Incident {
   step: string;
   what: Of<typeof WHAT>;
   outcome: Of<typeof OUTCOME>;
+  /** What finally worked (only when the poster says it worked). */
   fix: Of<typeof FIX> | null;
+  /** Everything the poster tried, including what did not work. */
+  tried: Of<typeof FIX>[];
   found_out: Of<typeof FOUND_OUT>;
   /** ≤25-word paraphrase that passed checkParaphrase, or null. */
   gist: string | null;
 }
 
 export interface ExtractRecord {
-  v: 1;
+  /** 2: incidents carry tried vs worked fixes, advice to others is excluded, steps are distinct. */
+  v: 2;
   post_id: string;
   url: string;
   thread_url: string | null;
@@ -92,11 +96,17 @@ export function validateRecord(raw: any, post: TextPost): ExtractRecord | null {
   const incidents: Incident[] = (Array.isArray(raw.incidents) ? raw.incidents : [])
     .slice(0, 3)
     .filter(grounded)
+    // Advice to the reader ("hire a lawyer") is not something that happened to the poster.
+    .filter((x: any) => x.own !== false)
     .map((x: any) => {
       const gist = typeof x.gist === "string" && x.gist.trim() && checkParaphrase(post.text, x.gist.trim()).ok ? x.gist.trim() : null;
-      return { step: stepCode(x.step), what: pick(WHAT, x.what, "other"), outcome: pick(OUTCOME, x.outcome, "-"), fix: x.fix == null ? null : pick(FIX, x.fix, "other"), found_out: pick(FOUND_OUT, x.found_out, "-"), gist };
+      const fix = x.fix == null ? null : pick(FIX, x.fix, "other");
+      const worked = x.worked === true;
+      const tried = picks(FIX, [...(Array.isArray(x.tried) ? x.tried : []), ...(fix && !worked ? [fix] : [])]);
+      return { step: stepCode(x.step), what: pick(WHAT, x.what, "other"), outcome: pick(OUTCOME, x.outcome, "-"), fix: worked ? fix : null, tried, found_out: pick(FOUND_OUT, x.found_out, "-"), gist };
     });
-  const steps = (Array.isArray(raw.steps) ? raw.steps : []).filter(grounded).map((x: any) => stepCode(x.step));
+  // Distinct steps in first-mentioned order; "other" says nothing about the order.
+  const steps = [...new Set((Array.isArray(raw.steps) ? raw.steps : []).filter(grounded).map((x: any) => stepCode(x.step)))].filter((x) => x !== "other") as string[];
   const paid_for = (Array.isArray(raw.paid_for) ? raw.paid_for : []).filter(grounded).map((x: any) => ({ what: pick(PAID, x.what, "other"), worth: pick(WORTH, x.worth, "?") }));
   const triggerList = (Array.isArray(raw.triggers) ? raw.triggers : []).filter((x: any) => typeof x === "object" && grounded(x));
   const triggers = picks(TRIGGERS, triggerList.map((x: any) => x.code));
@@ -109,7 +119,7 @@ export function validateRecord(raw: any, post: TextPost): ExtractRecord | null {
   const tags = post.tags;
   const stepCountry = [...incidents.map((i) => i.step), ...steps].find((s) => s !== "other")?.split(":")[0]?.toUpperCase();
   return {
-    v: 1,
+    v: 2,
     post_id: post.id,
     url: post.url,
     thread_url: post.thread_url ?? null,
@@ -150,10 +160,10 @@ Each post below is by someone describing their OWN move (to or within Italy, Ire
 For EVERY incident, step, paid-for item, trigger and choice, add "evidence": 3 to 12 words copied EXACTLY from the post that show it. Claims without exact evidence are discarded.
 
 Fields per post:
-- who: household (${HOUSEHOLD.join("|")}), partner_non_eu (true|false|null), passports (${PASSPORTS.join("|")}), income (${INCOME.join("|")}), route (${ROUTE.join("|")}), consulate (${CONSULATE.join("|")}), region (city or region named, or null)
-- incidents (0 to 3 things that went wrong for them): step (a code below), what (${WHAT.join("|")}), outcome (${OUTCOME.join("|")}), fix (what worked: ${FIX.join("|")}, or null), found_out (${FOUND_OUT.join("|")}), gist (your own words, at most 25 words, third person; never copy 8 words in a row; only numbers and names that appear in the post), evidence
-- steps: the steps they took IN THE ORDER they say they took them, each {step, evidence}; empty if they give no order
-- triggers: why they moved, each {code: ${TRIGGERS.join("|")}, evidence}
+- who, ONLY what the post states (never guess from tone; "my wife" or "my husband" = couple, "our kids" = family_kids): household (${HOUSEHOLD.join("|")}), partner_non_eu (true|false|null), passports (${PASSPORTS.join("|")}), income (${INCOME.join("|")}), route (${ROUTE.join("|")}; use the exact visa named, e.g. a D6 is d6, not d8), consulate (${CONSULATE.join("|")}), region (city or region named, or null)
+- incidents (0 to 3 things that went wrong FOR THE POSTER): step (a code below; for renewals use the renewal code), what (${WHAT.join("|")}), outcome (${OUTCOME.join("|")}), own (true only if it happened to the poster or their household; advice to the reader such as "go in person" or "hire a lawyer" is own=false), tried (everything they tried: ${FIX.join("|")}), fix (the one thing that finally resolved it, or null), worked (true only if the poster says the fix resolved it), found_out (${FOUND_OUT.join("|")}), gist (your own words, at most 25 words, third person; never copy 8 words in a row; only numbers and names that appear in the post), evidence
+- steps: the DISTINCT steps they took, in the order they took them, each {step, evidence}; empty if they give no order; never repeat a step
+- triggers: why they MOVED ABROAD (not why they stay, and not why they chose a lawyer), each {code: ${TRIGGERS.join("|")}, evidence}; usually empty
 - chose: {picked: ${DESTS.join("|")}, over: [...], because: [${CRITERIA.join("|")}], evidence} or null
 - paid_for: help they paid for, each {what: ${PAID.join("|")}, worth: +|-|~|?, evidence}
 - emotion (${EMOTION.join("|")}), valence (+|-|~)

@@ -151,13 +151,14 @@ function extractSection(records: ExtractRecord[]): string[] {
     ...records.flatMap((r) => r.incidents.filter((i) => i.gist).map((i) => `- ${i.gist} ${r.url} (${r.created_at?.slice(0, 10) ?? "undated"}${r.rule_dependent ? ", depends on a changed rule" : ""})`)).slice(0, 30),
   ];
   for (const [country, steps] of Object.entries(a.order)) out.push("", `Usual order stated by movers (${country}): ${steps.map((s) => s.step).join(" → ")}`);
-  if (a.paid_for.length) out.push("", "Paid help: " + a.paid_for.map((p) => `${p.what} (${p.posts}; worth it + ${p.worth["+"]} / - ${p.worth["-"]} / ~ ${p.worth["~"]})`).join(", "));
+  if (a.paid_for.length) out.push("", "Paid help: " + a.paid_for.map((p) => `${p.what} (${p.posts}; worth it + ${p.worth["+"]} / - ${p.worth["-"]} / ~ ${p.worth["~"]} / unknown ${p.worth["?"]})`).join(", "));
   // Plain-language candidates only: no counts, no frequency words (anecdotes stay anecdotes).
   const themes = a.incidents
     .filter((i) => i.threads >= 2)
     .slice(0, 8)
     .map((i) => {
-      const fix = i.fixes[0];
+      // Waiting it out or an unnamed workaround is not advice anyone can act on.
+      const fix = i.fixes.find((f) => f.fix !== "waited" && f.fix !== "other");
       return `- ${i.step_label}: ${WHAT_LABEL[i.what] ?? i.what}.${fix ? ` A fix movers describe: ${FIX_LABEL[fix.fix] ?? fix.fix}.` : ""}`;
     });
   out.push("", "## Themes for publication (draft, needs human wording)", "", ...(themes.length ? themes : ["None reported in two or more threads yet."]));

@@ -13,7 +13,7 @@ const post = { id: "t1_a", text: TEXT, url: "https://www.reddit.com/r/PortugalEx
 const raw = {
   who: { household: "couple", partner_non_eu: null, passports: ["CA"], income: "remote_na", route: "d7", consulate: "toronto", region: "Lisbon" },
   incidents: [
-    { step: "pt:aima", what: "long_wait", outcome: "resolved", fix: "lawyer", found_out: "at_office", gist: "AIMA appointment took most of a year; a lawyer emailing weekly finally secured a slot.", evidence: "the AIMA appointment took nine months" },
+    { step: "pt:aima", what: "long_wait", outcome: "resolved", own: true, tried: ["called_or_emailed_repeatedly"], fix: "lawyer", worked: true, found_out: "at_office", gist: "AIMA appointment took most of a year; a lawyer emailing weekly finally secured a slot.", evidence: "the AIMA appointment took nine months" },
     { step: "pt:made-up-step", what: "teleported", outcome: "stuck", fix: "magic", found_out: "-", gist: "the AIMA appointment took nine months and our card expired while waiting", evidence: "not in the post at all" },
   ],
   steps: [{ step: "pt:visa-application", evidence: "applied for the D7 at VFS Toronto" }, { step: "pt:nif", evidence: "Do your NIF and bank account before you fly" }, { step: "pt:aima", evidence: "AIMA appointment" }],
@@ -36,7 +36,7 @@ test("validateRecord: cleans codes, checks gists, grounds every claim in the tex
   const r = validateRecord(raw, post as any)!;
   assert.equal(r.country, "PT");
   assert.equal(r.incidents.length, 1, "the ungrounded incident is dropped");
-  assert.deepEqual(r.incidents[0], { step: "pt:aima", what: "long_wait", outcome: "resolved", fix: "lawyer", found_out: "at_office", gist: "AIMA appointment took most of a year; a lawyer emailing weekly finally secured a slot." });
+  assert.deepEqual(r.incidents[0], { step: "pt:aima", what: "long_wait", outcome: "resolved", fix: "lawyer", tried: ["called_or_emailed_repeatedly"], found_out: "at_office", gist: "AIMA appointment took most of a year; a lawyer emailing weekly finally secured a slot." });
   assert.deepEqual(r.steps, ["pt:visa-application", "pt:nif", "pt:aima"]);
   assert.deepEqual(r.paid_for, [{ what: "lawyer", worth: "+" }]);
   assert.equal(r.who.consulate, "toronto");
@@ -72,4 +72,26 @@ test("extractRecords: batches of 10, one call each, records keyed by index, cost
 test("extractPrompt lists the codebook and asks for verbatim evidence", () => {
   const p = extractPrompt("q", [post as any]);
   assert.ok(p.includes("ca:nr73") && p.includes("evidence"));
+});
+
+test("v2: advice to others is dropped, fixes count only when they worked, steps are de-duplicated", () => {
+  const v2 = {
+    ...raw,
+    incidents: [
+      { step: "pt:aima-renewal", what: "no_response", outcome: "resolved", own: true, tried: ["called_or_emailed_repeatedly", "escalated_complaint"], fix: "lawyer", worked: true, found_out: "at_office", gist: null, evidence: "the AIMA appointment took nine months" },
+      { step: "pt:aima", what: "long_wait", outcome: "delay", own: true, tried: ["called_or_emailed_repeatedly"], fix: "escalated_complaint", worked: false, found_out: "-", gist: null, evidence: "our card expired while waiting" },
+      { step: "pt:nif", what: "wrong_order", outcome: "-", own: false, tried: [], fix: "booked_before_flying", worked: true, found_out: "-", gist: null, evidence: "Do your NIF and bank account before you fly" },
+    ],
+    steps: [{ step: "pt:aima", evidence: "AIMA appointment" }, { step: "pt:aima", evidence: "AIMA appointment" }, { step: "other", evidence: "We applied for the D7" }, { step: "pt:nif", evidence: "Do your NIF" }],
+  };
+  const r = validateRecord(v2, post as any)!;
+  assert.equal(r.v, 2);
+  assert.equal(r.incidents.length, 2, "advice (own=false) is not the poster's incident");
+  assert.deepEqual(r.incidents[0]!.tried, ["called_or_emailed_repeatedly", "escalated_complaint"]);
+  assert.equal(r.incidents[0]!.fix, "lawyer");
+  assert.equal(r.incidents[0]!.step, "pt:aima-renewal");
+  assert.equal(r.incidents[0]!.what, "no_response");
+  assert.equal(r.incidents[1]!.fix, null, "a fix that did not work is only a try");
+  assert.deepEqual(r.incidents[1]!.tried, ["called_or_emailed_repeatedly", "escalated_complaint"]);
+  assert.deepEqual(r.steps, ["pt:aima", "pt:nif"]);
 });
