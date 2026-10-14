@@ -32,6 +32,12 @@ export function defaultLlm(prompt: string): string {
   if (prompt.includes("Write the 2 to 4 poll options")) return JSON.stringify({ options: [{ title: "Yes", description: "Yes." }, { title: "No", description: "No." }] });
   if (prompt.includes("You are sorting posts")) return sortReply(prompt);
   if (prompt.includes("These posts all chose the answer")) return JSON.stringify({ summary: "Short synthetic summary.", points: [{ text: "Synthetic reason", post: 0, quote: "nothing" }] });
+  if (prompt.includes("Code what THEY say happened")) {
+    const posts = [...prompt.slice(prompt.lastIndexOf("Posts:")).matchAll(/^\[(\d+)\] (.*)$/gm)];
+    return JSON.stringify({
+      items: posts.map((m) => ({ i: Number(m[1]), who: { household: "couple" }, incidents: [{ step: "pt:aima", what: "long_wait", outcome: "delay", fix: null, found_out: "at_office", gist: null, evidence: m[2]!.split(" ").slice(0, 5).join(" ") }], steps: [], triggers: [], chose: null, paid_for: [], emotion: "frustration", valence: "-" })),
+    });
+  }
   if (prompt.includes("We build a public-opinion poll from Reddit threads")) return JSON.stringify({ queries: ["canadians portugal regret"], subreddits: ["PortugalExpats"], core: "canadians portugal" });
   return "{}";
 }
@@ -44,7 +50,9 @@ export function sortReply(prompt: string): string {
   for (const m of body.matchAll(/^\[(\d+)\] (.*)$/gm)) {
     const t = m[2]!.toLowerCase();
     const b = /\blove\b/.test(t) ? "0 3" : /\bregret\b/.test(t) ? "1 3" : "N 0";
-    lines.push(tags ? `${m[1]} ${b} S CA PT Y en` : `${m[1]} ${b} -`);
+    // Research mode: posts in the first person describe their own experience.
+    const own = /\b(we|our|my|i)\b/.test(t) ? "X" : "-";
+    lines.push(tags ? `${m[1]} ${b} S CA PT Y en ${own}` : `${m[1]} ${b} -`);
   }
   return lines.join("\n");
 }

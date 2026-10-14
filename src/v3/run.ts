@@ -8,6 +8,7 @@ import { collectReddit, fetchRedditProfiles, fetchSubredditInfo } from "./reddit
 import { collectX } from "./x.ts";
 import { buildThemes } from "./themes.ts";
 import { researchStats } from "../np/subsets.ts";
+import { extractRecords } from "../np/extract.ts";
 import { countIssues, reconcileThemes } from "./counts.ts";
 import { PICKS_CHUNK, isRealPick, otherPicks, planPicks, tallyPicks, type PostPick } from "./picks.ts";
 import {
@@ -51,6 +52,8 @@ const llmGate = new Semaphore(env.llmConcurrency);
 const picksGate = new Semaphore(Number(process.env.PICKS_CONCURRENCY ?? Math.min(60, env.llmConcurrency)));
 const PICKS_WAIT_MS = Number(process.env.PICKS_WAIT_MS ?? 5_000);
 /** Most posts each source may send to the sorter; past this, extra posts cost money but barely move the poll. */
+/** Most posts the research extraction pass reads per run (best relevance first). */
+const EXTRACT_MAX = Number(process.env.EXTRACT_MAX ?? 250);
 const POOL_CAP: Record<V3Source, number> = { reddit: Number(process.env.POOL_CAP_REDDIT ?? 3500), x: Number(process.env.POOL_CAP_X ?? 4500) };
 /** Replies this short ("this", "lol", "+1") almost never carry a stance the sorter can use. */
 const MIN_WORDS = 3;
@@ -317,6 +320,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     // ---------------------------------------------------------- sorting
     stage = "sorting";
     const labels = new Map<string, Label & { option: string | null }>();
+    /** Research extraction: first-hand posts describing the poster's own experience, opinions or not (text stays in memory). */
+    const candidates: { p: RawPost; l: Label }[] = [];
     const unsorted: RawPost[] = [];
     const shown = new Map<string, Post>();
     // Eval only (DEBUG_POOL=1): a sample of what the sorter threw away, so a judge can measure missed opinions.
@@ -430,6 +435,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
             sortedCount++;
             const lab = { ...l, option: optionFor(l) };
             labels.set(p.id, lab);
+            if (req.extract && l.bucket !== "drop" && l.tags?.own && (l.tags.firsthand === "S" || l.tags.firsthand === "L")) candidates.push({ p, l });
             if (debugPool && !lab.option && discarded.length < 4000)
               discarded.push({ id: p.id, source: p.source, bucket: String(l.bucket), text: p.text.slice(0, 500), thread: p.thread_title, community: p.community });
             if (l.bucket === "drop") removed++;
@@ -671,6 +677,23 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     emit({ event: "poll", data: finalPoll });
     mark("final_poll");
 
+    // Research extraction runs alongside the summaries; its spend is metered on its own and then added to this run.
+    const extractJob = req.extract
+      ? (async () => {
+          const chosen = candidates
+            .sort((a, b) => relevanceOf(b.p, b.l, window) - relevanceOf(a.p, a.l, window))
+            .slice(0, overBudget() ? 0 : EXTRACT_MAX)
+            .map(({ p, l }) => ({ id: p.id, url: p.url, thread_url: p.thread_url, community: p.community, created_at: isoFromEpoch(p.created_utc), score: p.score, tags: l.tags, text: p.text, author: p.author }));
+          const em = newMeter();
+          const r = await meterStore.run(em, () => extractRecords(chosen, { query: req.query, signal }));
+          m.llmUsd += em.llmUsd;
+          m.llmCalls += em.llmCalls;
+          m.llmFailed += em.llmFailed;
+          emit({ event: "extract", data: { v: 1, candidates: chosen.length, eligible: candidates.length, records: r.records, rejected: r.rejected, failed_batches: r.failed_batches, cost_usd: round(em.llmUsd) } });
+          mark("extract_done");
+        })().catch((e) => log.warn("extraction failed", { error: String(e).slice(0, 200) }))
+      : Promise.resolve();
+
     // ---------------------------------------------------------- reasons + lead profiles, in parallel
     stage = "writing_reasons";
     // Summaries for every option run at once; each streams as soon as it is written.
@@ -704,6 +727,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     await within(Promise.all([profileJob, subJob, lateProfileJob]), 1_000, undefined);
     mark("reasons_done");
 
+    await extractJob;
     stage = "done";
     const cost: Record<string, number | null> = { llm_usd: round(m.llmUsd), x_usd: round(m.xUsd), serper_usd: round(m.serperCredits * 0.001), total_usd: round(m.llmUsd + m.xUsd + m.serperCredits * 0.001) };
     // Proxy traffic is reported on research runs or when a price is configured; total_usd stays LLM + X + Serper as before.

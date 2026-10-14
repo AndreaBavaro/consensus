@@ -45,3 +45,9 @@ test("profileRequest adds nothing for the default profile and tags for newpostco
   assert.equal(profileRequest(PROFILES.newpostcode).subs!.length, 14);
   assert.deepEqual(profileRequest(resolveProfile({ lang: "it", "deny-subs": "Italian" }, {})), { denySubs: ["Italian"], lang: ["it"] });
 });
+
+test("--extract turns on the extraction pass; it is off by default, even under the profile", async () => {
+  const { profileRequest } = await import("../src/v3/profile.ts");
+  assert.equal(profileRequest(PROFILES.newpostcode).extract, undefined);
+  assert.equal(profileRequest(resolveProfile({ profile: "newpostcode", extract: "" }, {})).extract, true);
+});

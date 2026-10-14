@@ -25,9 +25,11 @@ export interface Profile {
   lang: string[];
   /** Paraphrased quote-bank rows written per option at the end of a run. */
   quotesPerOption: number;
+  /** Coded extraction records from first-hand posts (pilot; off until audited). */
+  extract: boolean;
 }
 
-const DEFAULT: Profile = { name: "default", store: "full", research: false, tags: false, lean: false, subs: [], denySubs: [], lang: [], quotesPerOption: 0 };
+const DEFAULT: Profile = { name: "default", store: "full", research: false, tags: false, lean: false, subs: [], denySubs: [], lang: [], quotesPerOption: 0, extract: false };
 
 export const PROFILES: Record<ProfileName, Profile> = {
   default: DEFAULT,
@@ -41,6 +43,7 @@ export const PROFILES: Record<ProfileName, Profile> = {
     denySubs: ["Italian", "ItalyTravel", "irishtourism", "travel"],
     lang: [],
     quotesPerOption: 5,
+    extract: false,
   },
 };
 
@@ -60,12 +63,14 @@ export function resolveProfile(flags: Record<string, string | undefined>, env: R
   if (flags["deny-subs"] !== undefined) p.denySubs = list(flags["deny-subs"]);
   if (flags.lang !== undefined) p.lang = list(flags.lang).map((l) => l.toLowerCase());
   if (flags.quotes !== undefined) p.quotesPerOption = Number(flags.quotes);
+  if ("extract" in flags) p.extract = true;
   return p;
 }
 
 /** Request fields a profile switches on; the default profile adds none, so default requests are unchanged. */
-export function profileRequest(p: Profile): { tags?: boolean; lean?: boolean; subs?: string[]; denySubs?: string[]; lang?: string[] } {
+export function profileRequest(p: Profile): { tags?: boolean; lean?: boolean; subs?: string[]; denySubs?: string[]; lang?: string[]; extract?: boolean } {
   return {
+    ...(p.extract ? { extract: true, tags: true } : {}),
     ...(p.tags ? { tags: true } : {}),
     ...(p.lean ? { lean: true } : {}),
     ...(p.subs.length ? { subs: p.subs } : {}),
