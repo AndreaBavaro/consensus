@@ -16,7 +16,7 @@
     "build": "tsc --noEmit && tsc --noEmit -p web && vite build",
     "eval": "tsx --env-file=.env scripts/eval.ts",
     "audit": "tsx --env-file=.env scripts/audit.ts",
-    "mcp": "tsx mcp/server.ts"
+    "mcp": "tsx --env-file-if-exists=.env mcp/server.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",

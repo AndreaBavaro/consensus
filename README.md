@@ -43,27 +43,28 @@ Tools:
 
 - `consensus_get(id)` replays a saved search from useconsensus.io (the `id=` in a result URL). Free, no keys.
 - `consensus_featured()` lists the polls on the home page with their leading answer and id. Free, no keys.
+- `consensus_search(question, since?, until?, sources?)` runs the full pipeline from `src/v3` on your machine with the keys in `.env`, streams progress, and returns the poll plus what it cost. Each search bills your own LLM, Serper, Oxylabs and X keys (tens of cents); pass `sources: ["reddit"]` without an X key.
 
 Run it:
 
 ```bash
-npm run mcp            # same as: npx tsx mcp/server.ts
+npm run mcp            # same as: npx tsx --env-file-if-exists=.env mcp/server.ts
 ```
 
 Add it to a client (use the absolute path of this checkout):
 
 ```bash
 # Claude Code
-claude mcp add consensus -- npx -y tsx /ABS/PATH/consensus/mcp/server.ts
+claude mcp add consensus -- npx -y tsx --env-file-if-exists=/ABS/PATH/consensus/.env /ABS/PATH/consensus/mcp/server.ts
 ```
 
 ```json
 // Cursor: ~/.cursor/mcp.json (or .cursor/mcp.json in a project)
 // VS Code: .vscode/mcp.json        Claude Desktop: claude_desktop_config.json
-{ "mcpServers": { "consensus": { "command": "npx", "args": ["-y", "tsx", "/ABS/PATH/consensus/mcp/server.ts"] } } }
+{ "mcpServers": { "consensus": { "command": "npx", "args": ["-y", "tsx", "--env-file-if-exists=/ABS/PATH/consensus/.env", "/ABS/PATH/consensus/mcp/server.ts"] } } }
 ```
 
-Try it with the inspector: `npx @modelcontextprotocol/inspector npx tsx mcp/server.ts`, then call `consensus_get` with `ByAYXunnmt6BGCQR`.
+A search can take up to a minute; if your client times out tool calls sooner, raise its MCP tool timeout (Claude Code: `MCP_TOOL_TIMEOUT`). Try it with the inspector: `npx @modelcontextprotocol/inspector npx tsx mcp/server.ts`, then call `consensus_get` with `ByAYXunnmt6BGCQR`.
 
 ## Limits and abuse guards
 
