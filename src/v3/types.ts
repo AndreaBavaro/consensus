@@ -162,6 +162,10 @@ export interface SearchRequest {
   budgetUsd?: number;
   /** Research profile: the sorter writes poster tags instead of the sales-lead column. */
   tags?: boolean;
+  /** Research runs: subreddits always searched, subreddits never fetched, extra search languages (see RedditTargeting). */
+  subs?: string[];
+  denySubs?: string[];
+  lang?: string[];
 }
 
 export interface V3Event {

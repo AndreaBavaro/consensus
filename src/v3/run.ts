@@ -217,7 +217,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   let xInfo: Awaited<ReturnType<typeof collectX>> | null = null;
 
   const redditTask = want("reddit")
-    ? deps.collectReddit(req.query, window, (t) => ingest(t.posts), () => mark("reddit_search"), signal)
+    ? deps.collectReddit(req.query, window, (t) => ingest(t.posts), () => mark("reddit_search"), signal, { subs: req.subs, denySubs: req.denySubs, lang: req.lang })
         .then((r) => (redditInfo = r))
         .catch((e) => log.error("reddit failed", { error: String(e) }))
         .finally(() => {

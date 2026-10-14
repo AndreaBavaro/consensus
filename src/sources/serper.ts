@@ -24,12 +24,12 @@ const googleDate = (d: string) => {
  */
 export async function googleSearch(
   q: string,
-  opts: { num?: number; since?: string; until?: string; signal?: AbortSignal } = {},
+  opts: { num?: number; since?: string; until?: string; signal?: AbortSignal; hl?: string; gl?: string } = {},
 ): Promise<OrganicResult[]> {
   const key = env.serperKey;
   if (!key) throw new Error("Missing environment variable SERPER_API_KEY");
   const range = [opts.since && `cd_min:${googleDate(opts.since)}`, opts.until && `cd_max:${googleDate(opts.until)}`].filter(Boolean);
-  const body = { q, num: opts.num ?? 20, ...(range.length ? { tbs: `cdr:1,${range.join(",")}` } : {}) };
+  const body = { q, num: opts.num ?? 20, ...(range.length ? { tbs: `cdr:1,${range.join(",")}` } : {}), ...(opts.hl ? { hl: opts.hl } : {}), ...(opts.gl ? { gl: opts.gl } : {}) };
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch("https://google.serper.dev/search", {

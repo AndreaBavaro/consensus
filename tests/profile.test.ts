@@ -42,4 +42,6 @@ test("profileRequest adds nothing for the default profile and tags for newpostco
   const { profileRequest } = await import("../src/v3/profile.ts");
   assert.deepEqual(profileRequest(PROFILES.default), {});
   assert.equal(profileRequest(PROFILES.newpostcode).tags, true);
+  assert.equal(profileRequest(PROFILES.newpostcode).subs!.length, 14);
+  assert.deepEqual(profileRequest(resolveProfile({ lang: "it", "deny-subs": "Italian" }, {})), { denySubs: ["Italian"], lang: ["it"] });
 });

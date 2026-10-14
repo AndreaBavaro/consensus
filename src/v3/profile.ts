@@ -64,6 +64,11 @@ export function resolveProfile(flags: Record<string, string | undefined>, env: R
 }
 
 /** Request fields a profile switches on; the default profile adds none, so default requests are unchanged. */
-export function profileRequest(p: Profile): { tags?: boolean } {
-  return p.tags ? { tags: true } : {};
+export function profileRequest(p: Profile): { tags?: boolean; subs?: string[]; denySubs?: string[]; lang?: string[] } {
+  return {
+    ...(p.tags ? { tags: true } : {}),
+    ...(p.subs.length ? { subs: p.subs } : {}),
+    ...(p.denySubs.length ? { denySubs: p.denySubs } : {}),
+    ...(p.lang.length ? { lang: p.lang } : {}),
+  };
 }

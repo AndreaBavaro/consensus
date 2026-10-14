@@ -38,7 +38,25 @@ export interface RedditPlan {
   queries: string[];
   /** `site:reddit.com/r/<sub>` searches for the communities most likely to answer. */
   siteQueries: string[];
+  /** Research runs with --lang: searches written in another language, run with Serper hl/gl. */
+  nativeQueries?: { q: string; lang: string }[];
 }
+
+/** Research-run targeting (--subs, --deny-subs, --lang); none of it is set by default. */
+export interface RedditTargeting {
+  /** Subreddits that always get a site: search. */
+  subs?: string[];
+  /** Subreddits whose threads are dropped from search hits before the title check and any fetch. */
+  denySubs?: string[];
+  /** Up to 4 extra planner searches per language, run with Serper hl/gl. */
+  lang?: string[];
+  /** Thread download; tests and the opt-in thread cache pass their own. */
+  fetchThread?: typeof fetchThread;
+}
+
+/** Serper `gl` (country) for a language code; New Postcode's languages map to their home countries. */
+const GL: Record<string, string> = { it: "it", pt: "pt", es: "es", fr: "fr", de: "de", nl: "nl", en: "ca", ga: "ie" };
+const NATIVE_MAX = 4;
 
 /*
  * Sparse round 1: the old template ("<question> regret", "anyone use <question>") only fit products and returned
@@ -46,8 +64,9 @@ export interface RedditPlan {
  * people who answer this question title threads, searches each named subject on its own (with its aliases), keeps
  * the place in every query, and names the subreddits that answer it, which become site: searches.
  */
-export async function planRedditSearches(query: string, signal?: AbortSignal): Promise<RedditPlan> {
-  const prompt = `We build a public-opinion poll from Reddit threads on: "${query}"
+export async function planRedditSearches(query: string, signal?: AbortSignal, target: Pick<RedditTargeting, "subs" | "lang"> = {}): Promise<RedditPlan> {
+  const langs = target.lang ?? [];
+  const base = `We build a public-opinion poll from Reddit threads on: "${query}"
 Write Google searches that find Reddit threads where MANY people give their own answer to this exact question (picks, verdicts, first-hand experience), not how-to or news threads.
 
 queries: 12 searches.
@@ -61,8 +80,17 @@ queries: 12 searches.
 subreddits: the 3 to 5 subreddits (names only, no r/) where people most often answer this question (e.g. startups, ycombinator, venturecapital, Entrepreneur; sanfrancisco, AskSF, bayarea, SFFood; running, RunningShoeGeeks; CRM, smallbusiness).
 core: the shortest search phrase for the subject itself, 1 to 5 words, with the place if any (e.g. "pearx yc", "thai food sf", "a16z speedrun").
 Return {"queries":[...],"subreddits":[...],"core":"..."}.`;
+  // Default runs send exactly today's prompt and schema; --lang adds a "native" field.
+  const prompt = langs.length
+    ? base.replace(
+        /Return \{"queries":\[\.\.\.\],"subreddits":\[\.\.\.\],"core":"\.\.\."\}\.$/,
+        `native: for each language code in ${JSON.stringify(langs)}, up to ${NATIVE_MAX} searches WRITTEN IN THAT LANGUAGE, phrased the way people living there or moving there title such threads (no operators, no word "reddit").
+Return {"queries":[...],"subreddits":[...],"core":"...","native":{${langs.map((l) => `"${l}":[...]`).join(",")}}}.`,
+      )
+    : base;
+  const schema = langs.length ? { ...SCHEMA, properties: { ...SCHEMA.properties, native: { type: "object", properties: Object.fromEntries(langs.map((l) => [l, { type: "array", items: { type: "string" } }])) } } } : SCHEMA;
   try {
-    const r = await completeJson<{ queries?: unknown[]; subreddits?: unknown[]; core?: unknown }>(prompt, SCHEMA, { maxTokens: 900, timeoutMs: 9_000, signal }, 1);
+    const r = await completeJson<{ queries?: unknown[]; subreddits?: unknown[]; core?: unknown; native?: Record<string, unknown[]> }>(prompt, schema, { maxTokens: langs.length ? 900 + 200 * langs.length : 900, timeoutMs: 9_000, signal }, 1);
     const strs = (a?: unknown[]) => (a ?? []).filter((q): q is string => typeof q === "string" && !!q.trim()).map((q) => q.trim());
     const queries = strs(r.queries).slice(0, 12);
     const core = typeof r.core === "string" && r.core.trim() ? r.core.trim() : query;
@@ -70,10 +98,16 @@ Return {"queries":[...],"subreddits":[...],"core":"..."}.`;
       .map((s) => s.replace(/^\/?r\//i, "").replace(/[^A-Za-z0-9_]/g, ""))
       .filter((s) => s.length >= 2)
       .slice(0, 4);
-    return { queries, siteQueries: subs.map((s) => `${core} site:reddit.com/r/${s}`) };
+    const lower = new Set(subs.map((s) => s.toLowerCase()));
+    const allow = (target.subs ?? []).filter((s) => !lower.has(s.toLowerCase()) && !!lower.add(s.toLowerCase()));
+    const plan: RedditPlan = { queries, siteQueries: [...subs, ...allow].map((s) => `${core} site:reddit.com/r/${s}`) };
+    if (langs.length) plan.nativeQueries = langs.flatMap((lang) => strs(r.native?.[lang]).slice(0, NATIVE_MAX).map((q) => ({ q, lang })));
+    return plan;
   } catch (e) {
     log.warn("search plan failed, raw question only", { error: String(e) });
-    return { queries: [], siteQueries: [] };
+    // Allowlisted subs are searched even when the planner fails.
+    const allow = target.subs ?? [];
+    return { queries: [], siteQueries: allow.map((s) => `${query} site:reddit.com/r/${s}`) };
   }
 }
 
@@ -115,8 +149,8 @@ export interface ThreadHit {
   snippet?: string;
 }
 
-export async function searchThreads(q: string, window: { since?: string; until?: string }, signal?: AbortSignal): Promise<ThreadHit[]> {
-  const results = await googleSearch(q.includes("site:") ? q : `${q} reddit`, { num: 20, ...window, signal });
+export async function searchThreads(q: string, window: { since?: string; until?: string }, signal?: AbortSignal, locale?: { hl: string; gl: string }): Promise<ThreadHit[]> {
+  const results = await googleSearch(q.includes("site:") ? q : `${q} reddit`, { num: 20, ...window, signal, ...locale });
   const out: ThreadHit[] = [];
   for (const r of results as OrganicResult[]) {
     const id = extractPostId(r.link);
@@ -230,8 +264,13 @@ export async function collectReddit(
   onThread: (t: FetchedThread) => void,
   onHits: (hits: ThreadHit[]) => void,
   signal?: AbortSignal,
+  target: RedditTargeting = {},
 ): Promise<{ queries: string[]; threadsFound: number; threadsFetched: number; threadsKept: number | null }> {
   const dates = { since: window.since, until: window.until };
+  const fetchOne = target.fetchThread ?? fetchThread;
+  const denied = new Set((target.denySubs ?? []).map((s) => s.toLowerCase()));
+  // Deny-listed subreddits leave the hit lists before the title check and before anything is fetched.
+  const allowed_ = (hits: ThreadHit[]) => (denied.size ? hits.filter((h) => !denied.has((h.url.match(/reddit\.com\/r\/(\w+)/i)?.[1] ?? "").toLowerCase())) : hits);
   const began = Date.now();
   const started = new Map<string, Promise<void>>();
   let fetched = 0;
@@ -245,7 +284,7 @@ export async function collectReddit(
   };
   // A thread that fails (proxy drop or burst timeout) gets one more try on fresh connections while there is time.
   const once = (id: string, retry: boolean): Promise<void> =>
-    fetchThread(id, window)
+    fetchOne(id, window)
       .then((t) => {
         if (t && !signal?.aborted) {
           fetched++;
@@ -261,14 +300,20 @@ export async function collectReddit(
     started.set(id, gate.run(() => once(id, false)));
   };
 
-  const rawSearch = searchThreads(query, dates, signal).then((hits) => {
+  const rawSearch = searchThreads(query, dates, signal).then((found) => {
+    const hits = allowed_(found);
     hits.slice(0, EARLY_THREADS).forEach((h) => start(h.id));
     onHits(hits);
     return hits;
   });
-  const plan = await planRedditSearches(query, signal);
+  const plan = await planRedditSearches(query, signal, target);
   const queries = [...plan.queries, ...plan.siteQueries];
-  const lists = await Promise.all([rawSearch, ...queries.map((q) => searchThreads(q, dates, signal).then((h) => (onHits(h), h)))]);
+  const native = plan.nativeQueries ?? [];
+  const lists = await Promise.all([
+    rawSearch,
+    ...queries.map((q) => searchThreads(q, dates, signal).then((f) => allowed_(f)).then((h) => (onHits(h), h))),
+    ...native.map((n) => searchThreads(n.q, dates, signal, { hl: n.lang, gl: GL[n.lang] ?? n.lang }).then((f) => allowed_(f)).then((h) => (onHits(h), h))),
+  ]);
   const all = mergeRanked(lists);
   // Threads the title check keeps go first; if it is slow or fails, search order stands.
   const kept = process.env.R_FILTER === "0" ? null : await filterThreads(query, all, signal);
@@ -280,7 +325,7 @@ export async function collectReddit(
   merged.forEach((h) => start(h.id));
   await Promise.all(started.values());
   if (retried) log.info("retried failed threads", { retried });
-  return { queries: [query, ...queries], threadsFound: all.length, threadsFetched: fetched, threadsKept: kept?.length ?? null };
+  return { queries: [query, ...queries, ...native.map((n) => n.q)], threadsFound: all.length, threadsFetched: fetched, threadsKept: kept?.length ?? null };
 }
 
 /** Reddit's default Snoo for a user with no avatar, picked by a hash of the name so it never changes between searches. */
