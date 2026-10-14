@@ -37,6 +37,8 @@ You need keys for OpenRouter (LLMs), TwitterAPI.io (X), Serper (Google search) a
 
 ## MCP: use Consensus from Claude Code, Cursor, Claude Desktop (`mcp/`)
 
+Step-by-step setup, keys and troubleshooting: [mcp/SETUP.md](mcp/SETUP.md).
+
 `mcp/server.ts` is a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Any MCP client can then ask "what do people on Reddit and X think about X" and get the poll with linked quotes.
 
 Tools:
