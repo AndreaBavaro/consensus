@@ -31,6 +31,8 @@ const log = logger("v3");
 
 /** Netlify cuts streams at 60s; every stage is bounded so `done` always lands before that. */
 const OPTIONS_AT_MS = Number(process.env.OPTIONS_AT_MS ?? 6_500);
+/** The whole options chain (sample call, then the from-question fallbacks) gives up after this; generic options follow. */
+const OPTIONS_FALLBACK_MS = Number(process.env.OPTIONS_FALLBACK_MS ?? 20_000);
 const SORT_DEADLINE_MS = Number(process.env.SORT_DEADLINE_MS ?? 40_000);
 const SPLIT_LATEST_MS = 36_000;
 /** Second Other pass runs only when Other is still above this share, and never starts after this point. */
@@ -259,21 +261,32 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     let qtype: string | undefined;
     const sample = sampleForOptions(pool);
     const sampleIds = sample.map((p) => p.id);
+    // Reddit-only search where Google search never answered and nothing came in: no LLM spend on a poll that cannot exist.
+    const searchDead = want("reddit") && !want("x") && !collecting() && m.serperOk === 0 && !pool.length;
+    const optAbort = new AbortController();
+    const optSignal = AbortSignal.any([signal, optAbort.signal]);
+    const optTimer = setTimeout(() => optAbort.abort(), OPTIONS_FALLBACK_MS);
     try {
-      if (sample.length >= 10) {
-        const w = await writeOptions(req.query, sample, signal);
+      if (searchDead) base = [];
+      else if (sample.length >= 10) {
+        const w = await writeOptions(req.query, sample, optSignal);
         if (w.purchasable === false) purchasable = false;
         qtype = w.qtype;
         base = w;
-      } else base = await writeOptionsFromQuestion(req.query, signal);
+      } else base = await writeOptionsFromQuestion(req.query, optSignal);
     } catch (e) {
       // Every question gets a poll: an "off-topic" sample (often an early, narrow or ambiguous one) is not a reason to stop.
       // Options are written from the question instead and the sorter still drops posts that are not about it.
       log.warn(e instanceof OffTopicError ? "sample judged off-topic; writing options from the question" : "options failed, retrying from the question", { error: String(e), pool: pool.length });
       timing.options_fallback = 1;
-      base = await writeOptionsFromQuestion(req.query, signal).catch(() => []);
-      if (!base.length) base = await writeOptionsFromQuestion(req.query, signal).catch(() => []);
+      base = await writeOptionsFromQuestion(req.query, optSignal).catch(() => []);
+      if (!base.length) base = await writeOptionsFromQuestion(req.query, optSignal).catch(() => []);
+    } finally {
+      clearTimeout(optTimer);
     }
+    // No LLM call has succeeded and options fell back to generic ones: sorting would fail the same way, so stop here.
+    const llmDead = !searchDead && !base.length && m.llmCalls === 0;
+    if (searchDead || llmDead) abort.abort();
     if (!base.length) base = genericOptions(req.query);
     const options: OptionState[] = base.map((o, i) => ({ ...o, id: `o${i}` }));
     const other: OptionState = { id: OTHER_ID, title: "Other", description: "Opinions that fit none of the options above." };
@@ -670,6 +683,13 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const cost = { llm_usd: round(m.llmUsd), x_usd: round(m.xUsd), serper_usd: round(m.serperCredits * 0.001), total_usd: round(m.llmUsd + m.xUsd + m.serperCredits * 0.001) };
     // "thin" lets the UI show a "not much data for this question" note instead of a misleading poll.
     const status = finalPoll.total_opinions === 0 ? "empty" : finalPoll.total_opinions < 20 ? "thin" : "ok";
+    // A provider outage is an error, never "empty": "empty" means the question found no opinions.
+    const errorReason =
+      llmDead || (m.llmCalls === 0 && m.llmFailed > 0)
+        ? "llm_unavailable"
+        : want("reddit") && m.serperOk === 0 && (!want("x") || finalPoll.total_opinions === 0)
+          ? "search_unavailable"
+          : null;
     // Plain flags the UI can show as "not much data" notes; also logged so odd runs can be found later.
     const otherRow = finalPoll.options.find((o) => o.is_other);
     const realOptions = finalPoll.options.filter((o) => !o.is_other && o.count > 0).length;
@@ -688,7 +708,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
       event: "done",
       data: {
         id,
-        status: status === "ok" && flags.some((f) => f === "other_heavy" || f === "one_option") ? "thin" : status,
+        status: errorReason ? "error" : status === "ok" && flags.some((f) => f === "other_heavy" || f === "one_option") ? "thin" : status,
+        ...(errorReason ? { error_reason: errorReason } : {}),
         quality: { flags, purchasable },
         total_ms: elapsed(),
         timing,

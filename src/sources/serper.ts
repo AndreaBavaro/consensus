@@ -45,6 +45,7 @@ export async function googleSearch(
         m.serperCalls++;
         m.serperCredits += Number(data.credits ?? 1);
       }
+      if (m && res.ok) m.serperOk++;
       if (!res.ok) {
         log.error(`serper ${res.status}`, { message: data.message });
         return [];

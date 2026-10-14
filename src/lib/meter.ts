@@ -11,6 +11,8 @@ export interface Meter {
   xFailed: number;
   serperCredits: number;
   serperCalls: number;
+  /** Serper calls that came back 2xx; zero means search was unavailable for this run. */
+  serperOk: number;
   redditFetches: number;
   redditFailed: number;
 }
@@ -25,6 +27,7 @@ export const newMeter = (): Meter => ({
   xFailed: 0,
   serperCredits: 0,
   serperCalls: 0,
+  serperOk: 0,
   redditFetches: 0,
   redditFailed: 0,
 });
