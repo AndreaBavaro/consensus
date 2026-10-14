@@ -2,14 +2,21 @@
  * Runs the v3 pipeline from the terminal and records the stream.
  *   npm run v3 -- "is hubspot worth it for a small business" [--since=2025-10-11] [--until=...] [--sources=reddit,x] [--out=file.json] [--quiet]
  *   npm run v3 -- --batch=questions.txt --out-dir=runs/x [--concurrency=3]   (one question per line, "q | since")
+ * New Postcode research (see src/v3/profile.ts): --profile=newpostcode (or CONSENSUS_PROFILE=newpostcode) and
+ *   --store=links|full (links-only saves no post text; default full, links under the profile).
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { runV3 } from "../src/v3/run.ts";
+import { resolveProfile } from "../src/v3/profile.ts";
+import { saveRun } from "../src/np/links.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")) as [string, string][]);
 const words = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const sources = (args.sources ?? "reddit,x").split(",") as V3Source[];
+const profile = resolveProfile(args);
+/** Today's file formats are kept unless a profile or --store asks for the research writer. */
+const researchWriter = profile.name !== "default" || args.store !== undefined;
 
 async function one(query: string, since?: string, until?: string, quiet = false) {
   const t0 = Date.now();
@@ -76,5 +83,7 @@ if (args.batch) {
   await writeFile(`${dir}/summary.json`, JSON.stringify(rows, null, 1));
 } else {
   const r = await one(words.join(" ") || "is hubspot worth it for a small business", args.since, args.until, "quiet" in args);
-  if (args.out) await writeFile(args.out, JSON.stringify(r.events.map(({ t, ...e }) => ({ ...e, t_ms: t })), null, 1));
+  const events = r.events.map(({ t, ...e }) => ({ ...e, t_ms: t }));
+  if (args.out && researchWriter) await saveRun(args.out, { query: r.query, since: r.since, until: args.until, events }, profile.store);
+  else if (args.out) await writeFile(args.out, JSON.stringify(events, null, 1));
 }
