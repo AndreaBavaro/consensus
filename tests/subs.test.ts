@@ -58,3 +58,13 @@ test("subs, deny-subs and lang shape the searches and the fetched threads", asyn
     net.restore();
   }
 });
+
+test("a planner-picked subreddit on the deny list gets no site: search", async () => {
+  const net = installFakeNet({ llm: planner });
+  try {
+    const plan = await planRedditSearches("Biggest mistake when moving from Canada to Italy", undefined, { denySubs: ["expats"] });
+    assert.deepEqual(plan.siteQueries, ["canada to italy site:reddit.com/r/ItalyExpat"]);
+  } finally {
+    net.restore();
+  }
+});

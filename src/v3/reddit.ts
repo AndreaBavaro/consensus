@@ -64,7 +64,7 @@ const NATIVE_MAX = 4;
  * people who answer this question title threads, searches each named subject on its own (with its aliases), keeps
  * the place in every query, and names the subreddits that answer it, which become site: searches.
  */
-export async function planRedditSearches(query: string, signal?: AbortSignal, target: Pick<RedditTargeting, "subs" | "lang"> = {}): Promise<RedditPlan> {
+export async function planRedditSearches(query: string, signal?: AbortSignal, target: Pick<RedditTargeting, "subs" | "lang" | "denySubs"> = {}): Promise<RedditPlan> {
   const langs = target.lang ?? [];
   const base = `We build a public-opinion poll from Reddit threads on: "${query}"
 Write Google searches that find Reddit threads where MANY people give their own answer to this exact question (picks, verdicts, first-hand experience), not how-to or news threads.
@@ -98,9 +98,11 @@ Return {"queries":[...],"subreddits":[...],"core":"...","native":{${langs.map((l
       .map((s) => s.replace(/^\/?r\//i, "").replace(/[^A-Za-z0-9_]/g, ""))
       .filter((s) => s.length >= 2)
       .slice(0, 4);
+    // A deny-listed sub would only return hits that are thrown away: no site: search for it.
+    const deny = new Set((target.denySubs ?? []).map((s) => s.toLowerCase()));
     const lower = new Set(subs.map((s) => s.toLowerCase()));
     const allow = (target.subs ?? []).filter((s) => !lower.has(s.toLowerCase()) && !!lower.add(s.toLowerCase()));
-    const plan: RedditPlan = { queries, siteQueries: [...subs, ...allow].map((s) => `${core} site:reddit.com/r/${s}`) };
+    const plan: RedditPlan = { queries, siteQueries: [...subs, ...allow].filter((s) => !deny.has(s.toLowerCase())).map((s) => `${core} site:reddit.com/r/${s}`) };
     if (langs.length) plan.nativeQueries = langs.flatMap((lang) => strs(r.native?.[lang]).slice(0, NATIVE_MAX).map((q) => ({ q, lang })));
     return plan;
   } catch (e) {
