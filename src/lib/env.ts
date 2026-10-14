@@ -29,7 +29,14 @@ export interface LlmGateway {
   defaultVoters: string;
   /** Sort batches in flight at once; each batch is one primary call plus one per voter. SORT_CONCURRENCY overrides. */
   concurrency: number;
+  /**
+   * Price used to meter a call when the gateway's response has no `usage.cost`, so DAILY_SPEND_CAP_USD never sees LLM
+   * spend as zero. Presets carry a deliberately high estimate; custom gateways must set LLM_USD_PER_1K_TOKENS.
+   */
+  usdPer1kTokens: number;
 }
+/** Above the per-token price of every default model on either preset (14 Oct 2026), so a missing usage.cost over-counts. */
+const PRESET_FALLBACK_USD_PER_1K = 0.002;
 const PRESETS: Record<GatewayName, { base: string | null; keyVar: string; defaultModel: string | null; defaultVoters: string; concurrency: number }> = {
   // Default, tuned for production plans (Growth and above, 200+ requests in flight): 60 batches with the 2-of-3 vote, so
   // 180 calls in flight; the voter ids are the Straitly equivalents of the OpenRouter voters below. On the starter plan
@@ -60,7 +67,16 @@ export const env = {
     if (!base) throw new Error("LLM_GATEWAY=custom needs LLM_BASE_URL (an OpenAI-compatible /v1 base URL)");
     const key = process.env.LLM_API_KEY || process.env[p.keyVar];
     if (!key) throw new Error(`Missing environment variable ${p.keyVar} (or LLM_API_KEY) for the ${name} LLM gateway`);
-    return { name, url: chatUrl(base), key, defaultModel: p.defaultModel, defaultVoters: p.defaultVoters, concurrency: p.concurrency };
+    const priceVar = process.env.LLM_USD_PER_1K_TOKENS?.trim();
+    const price = priceVar ? Number(priceVar) : name === "custom" ? NaN : PRESET_FALLBACK_USD_PER_1K;
+    // Fail closed: a custom gateway may not report usage.cost, and the daily spend cap must still see LLM spend.
+    if (!Number.isFinite(price) || price < 0)
+      throw new Error(
+        name === "custom"
+          ? "LLM_GATEWAY=custom needs LLM_USD_PER_1K_TOKENS (a price per 1,000 tokens, e.g. 0.002) so DAILY_SPEND_CAP_USD can meter calls when the gateway returns no usage.cost"
+          : "LLM_USD_PER_1K_TOKENS must be a non-negative number",
+      );
+    return { name, url: chatUrl(base), key, defaultModel: p.defaultModel, defaultVoters: p.defaultVoters, concurrency: p.concurrency, usdPer1kTokens: price };
   },
   get llmModel() {
     const m = process.env.LLM_MODEL ?? this.llmGateway.defaultModel;

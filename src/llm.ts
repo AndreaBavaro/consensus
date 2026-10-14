@@ -55,6 +55,21 @@ function stripFences(text: string): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let warnedNoCost = false;
 
+/**
+ * USD for one call: the gateway's own usage.cost when present, otherwise tokens x the gateway's fallback price, so the
+ * daily spend cap never counts a call as free. Tokens come from usage.total_tokens, or ~4 characters per token if absent.
+ */
+export function callCost(usage: { cost?: number; total_tokens?: number } | undefined, prompt: string, output: string): number {
+  if (typeof usage?.cost === "number" && Number.isFinite(usage.cost)) return usage.cost;
+  const gw = env.llmGateway;
+  const tokens = usage?.total_tokens ?? Math.ceil((prompt.length + output.length) / 4);
+  if (!warnedNoCost) {
+    warnedNoCost = true;
+    log.warn(`${gw.name} returned no usage.cost; metering at ${gw.usdPer1kTokens} USD per 1k tokens (LLM_USD_PER_1K_TOKENS)`);
+  }
+  return (tokens / 1000) * gw.usdPer1kTokens;
+}
+
 export async function completeText(prompt: string, opts: LlmOptions & { json?: boolean } = {}, retries = 2): Promise<string> {
   let lastError: unknown;
   // Socket drops ("fetch failed") come in bursts that kill hundreds of in-flight calls at once (X round 7: 3016 in one
@@ -68,7 +83,7 @@ export async function completeText(prompt: string, opts: LlmOptions & { json?: b
         body: JSON.stringify(body(prompt, opts, opts.json ? { response_format: { type: "json_object" } } : {})),
         signal: AbortSignal.any([AbortSignal.timeout(opts.timeoutMs ?? 45_000), ...(opts.signal ? [opts.signal] : [])]),
       });
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; error?: unknown; usage?: { cost?: number } };
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; error?: unknown; usage?: { cost?: number; total_tokens?: number } };
       if (!res.ok || !data.choices) {
         const err = new Error(`${env.llmGateway.name} ${res.status}: ${JSON.stringify(data.error ?? data)}`) as Error & { status?: number; retryAfterMs?: number };
         err.status = res.status;
@@ -76,17 +91,13 @@ export async function completeText(prompt: string, opts: LlmOptions & { json?: b
         if (res.status === 429 && ra > 0) err.retryAfterMs = ra * 1000;
         throw err;
       }
+      const content = data.choices[0]?.message?.content ?? "";
       const m = meter();
       if (m) {
         m.llmCalls++;
-        m.llmUsd += Number(data.usage?.cost ?? 0);
-        // Without per-call cost the daily spend cap cannot see LLM spend; say so once rather than silently under-count.
-        if (data.usage && data.usage.cost === undefined && !warnedNoCost) {
-          warnedNoCost = true;
-          log.warn(`${env.llmGateway.name} does not return usage.cost; LLM spend is not metered (DAILY_SPEND_CAP_USD only sees X and Serper)`);
-        }
+        m.llmUsd += callCost(data.usage, prompt, content);
       }
-      return data.choices[0]?.message?.content ?? "";
+      return content;
     } catch (e) {
       lastError = e;
       if (opts.signal?.aborted) break;
