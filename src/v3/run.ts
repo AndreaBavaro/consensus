@@ -110,11 +110,21 @@ export function relevanceOf(p: RawPost, l: { strength: number; agree?: number },
   return Math.round((0.45 * direct + 0.25 * agree + 0.15 * fresh + 0.15 * eng) * 1000) / 1000;
 }
 
-export function runV3(req: SearchRequest): AsyncGenerator<V3Event> {
+/** Collectors and extras the pipeline calls; tests pass fakes, everyone else gets the real ones. */
+export interface V3Deps {
+  collectReddit: typeof collectReddit;
+  collectX: typeof collectX;
+  fetchRedditProfiles: typeof fetchRedditProfiles;
+  fetchSubredditInfo: typeof fetchSubredditInfo;
+}
+const DEPS: V3Deps = { collectReddit, collectX, fetchRedditProfiles, fetchSubredditInfo };
+
+export function runV3(req: SearchRequest, deps: Partial<V3Deps> = {}): AsyncGenerator<V3Event> {
   const out = new Channel<V3Event>();
   const m = newMeter();
+  const d = { ...DEPS, ...deps };
   meterStore.run(m, () => {
-    pipeline(req, m, (e) => out.push(e))
+    pipeline(req, m, (e) => out.push(e), d)
       .catch((e) => {
         log.error("search failed", { error: String(e), stack: (e as Error)?.stack });
         out.push({ event: "error", data: { message: "Something went wrong while building this poll. Please try again.", detail: String(e).slice(0, 300) } });
@@ -124,7 +134,7 @@ export function runV3(req: SearchRequest): AsyncGenerator<V3Event> {
   return out[Symbol.asyncIterator]();
 }
 
-async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void) {
+async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void, deps: V3Deps) {
   const t0 = Date.now();
   const elapsed = () => Date.now() - t0;
   const abort = new AbortController();
@@ -193,7 +203,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   let xInfo: Awaited<ReturnType<typeof collectX>> | null = null;
 
   const redditTask = want("reddit")
-    ? collectReddit(req.query, window, (t) => ingest(t.posts), () => mark("reddit_search"), signal)
+    ? deps.collectReddit(req.query, window, (t) => ingest(t.posts), () => mark("reddit_search"), signal)
         .then((r) => (redditInfo = r))
         .catch((e) => log.error("reddit failed", { error: String(e) }))
         .finally(() => {
@@ -203,7 +213,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
         })
     : Promise.resolve();
   const xTask = want("x")
-    ? collectX(req.query, window, ingest, signal)
+    ? deps.collectX(req.query, window, ingest, signal)
         .then((r) => (xInfo = r))
         .catch((e) => log.error("x failed", { error: String(e) }))
         .finally(() => {
@@ -440,13 +450,13 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     for (let i = 0; lanes.some((l) => i < l.length); i++) for (const l of lanes) { const p = l[i]; if (p) ordered.push(p); }
     const leadHandles = [...new Set(ordered.map((p) => p.author.handle))].slice(0, Number(process.env.R_PROFILE_MAX ?? 200));
     const profileJob = leadHandles.length
-      ? fetchRedditProfiles(leadHandles, EXTRAS_MS).then((profiles) => {
+      ? deps.fetchRedditProfiles(leadHandles, EXTRAS_MS).then((profiles) => {
           if (Object.keys(profiles).length) emit({ event: "authors", data: { source: "reddit", profiles } });
         })
       : Promise.resolve();
     const subs = [...new Set([...shown.values()].filter((p) => p.source === "reddit" && p.community).map((p) => p.community!))].slice(0, 40);
     const subJob = subs.length
-      ? fetchSubredditInfo(subs, EXTRAS_MS).then((communities) => {
+      ? deps.fetchSubredditInfo(subs, EXTRAS_MS).then((communities) => {
           if (Object.keys(communities).length) emit({ event: "communities", data: { communities } });
         })
       : Promise.resolve();
@@ -612,7 +622,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
       ),
     ].filter((h) => !asked.has(h));
     const lateProfileJob = lateHandles.length
-      ? fetchRedditProfiles(lateHandles, 2_500).then((profiles) => {
+      ? deps.fetchRedditProfiles(lateHandles, 2_500).then((profiles) => {
           if (Object.keys(profiles).length) emit({ event: "authors", data: { source: "reddit", profiles } });
         })
       : Promise.resolve();

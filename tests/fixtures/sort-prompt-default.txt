@@ -1,0 +1,47 @@
+You are sorting posts for a public-opinion poll on: "Canadians who moved to Portugal, do you regret it"
+
+POLL OPTIONS:
+0 = No regrets: Glad they moved.
+1 = Regret it: Wish they had stayed.
+
+THE TEST for every post: if you asked this poster "Canadians who moved to Portugal, do you regret it", what would they answer, judging ONLY from what they wrote here (and the thread or comment it replies to)? If you can tell, that is a vote. If you cannot tell, it is N. Being about the same topic is NOT a vote.
+
+BUCKET:
+- an option number: the post answers the question that way, in words or by clear implication. Examples of clear implication: under "is X worth it", "cancelled it, total waste of money" = not worth it, "best purchase I made this year" = worth it; under "best X", recommending or saying they love a specific X = a vote for that pick; under "A vs B", "switched from A to B and never looked back" = B. Short replies count when the comment they answer makes the lean clear ("No, never again" under "Is X worth it?").
+- O = the poster clearly answers the question with something none of the options captures (a different pick or a different position).
+- N = NOT a vote. This includes: posts on the topic that do not answer THIS question; general praise or criticism of a person or company that does not answer what was asked (under "will Trump win another election", "he's the worst president ever" is N, it is not a prediction); news, scores, stats and facts; tips and how-tos; questions; jokes or reactions with no answer; replies like "agreed", "this", "lol" whose own words do not show the answer; mixed views with no lean.
+- S = remove: spam, ads, giveaways, bots, news-headline accounts, link drops, self-promotion (pitching one's own product, service, agency, course, newsletter, "DM me", "we built", "check out my"), brand/official accounts promoting their own product (@AnthropicAI posting about Claude is not a vote for Claude), affiliate listicles, posts about a different thing that only shares a word, and posts that only use a name as a metaphor ("the Michael Jordan of presidents" is not a vote in a Jordan vs LeBron poll).
+- S also = WRONG PLACE or WRONG SUBJECT: if the question names a place (a city, neighborhood, region), a pick located somewhere else is S, not O ("Thai Taste in San Ramon" or "Asha Tea House in Berkeley" under a San Francisco question, "Kumako in San Jose Japantown" under best ramen in SF). Same for a different subject than asked (another accelerator's program details under "is a16z speedrun worth it" are N unless they compare it).
+A thread opener that only asks the question is N.
+A VS B and YES/NO: criticizing or praising one side alone is a vote ONLY if it answers the question. Under "A vs B", "A is overrated" or "A is a bad deal" is NOT a vote for B unless they say B (or the alternative) is better or they chose B; it is N. Under "is X worth it", praise or criticism of a different program is N.
+Ranked lists and "my picks" posts that name the poster's own top choice are a vote for their #1 (strength 2). Lists copied from elsewhere, "top 10" marketing threads and directories are S.
+MENTION IS NOT A VOTE: under "best X", naming a pick as a resource, event, example, place to apply, or one of several options to "check out" is N. It is a vote only if the poster says it is the best, their favorite, what they chose and liked, or what they recommend over others. Advice ("talk to angels", "get traction first") that names something in passing is N.
+ANNOUNCEMENTS ARE NOT VOTES: program or funding announcements, "applications open", demo day promos, accepted/rejected/joined news ("got into YC", "rejected from Speedrun") with no judgment of whether it was worth it, and posts by the subject's own account or its staff hyping it are S (if promotional) or N.
+O (Other) is only for a clear DIFFERENT answer of the same kind as asked (another named VC firm under "best VC", another named restaurant in the same city). Vague complaints, "none", or general takes on the whole category are N.
+If a post picks several options (e.g. "pepperoni and mushroom" under best topping), give the one it mentions first.
+Be strict: when in doubt between an option and N, choose N. A wrong vote is much worse than a missed one.
+
+STRENGTH (for option or O): 3 = clear answer with a reason or first-hand experience, 2 = clear answer, 1 = answer implied but unmistakable. Use 0 for N and S.
+
+LEAD = a sales lead: the POSTER'S OWN, first-person buying situation in this space. Most posts are "-".
+L = the poster says they are personally shopping: "I'm looking for", "what should I use for my team", "need a CRM for my shop"
+W = the poster says they personally are switching, cancelling or just moved ("we're moving to X", "cancelled last month")
+F = the poster is personally fed up with a product they use now (price, bugs, support), in their own words
+B = the poster says they just bought or just started using a product
+- = everything else, including: people recommending or advising others, general opinions, vendors/consultants/agencies, hypotheticals, quoting others, and anything marked S.
+Questions in a reply that answer someone else are "-" (they are advising, not buying).
+
+POSTS:
+[0] (Reddit thread opener in r/PortugalExpats) Canadians in Portugal, any regrets? Thinking of moving next year, would love to hear from people who did it.
+[1] (Reddit reply in thread "Canadians in Portugal, any regrets?") I love it here after two years in Lisbon, the pace of life is so much better than Toronto.
+[2] (Reddit reply in thread "Canadians in Portugal, any regrets?", answering: "Did you move with kids?") Deep regret, the bureaucracy at AIMA took eleven months and we nearly went back to Calgary.
+[3] (Reddit reply in thread "Canadians in Portugal, any regrets?") I love the food and the weather, we moved from Ottawa in 2023 and never looked back.
+[4] (Reddit reply in thread "Canadians in Portugal, any regrets?") Some regret honestly, salaries are low and rent in Porto keeps climbing every single year.
+[5] (Reddit reply in thread "Canadians in Portugal, any regrets?") Does anyone know which documents the consulate in Toronto wants for the D7 visa these days?
+
+Output exactly one line per post, in order, as "<index> <bucket> <strength> <lead>", e.g.
+0 1 3 -
+1 S 0 -
+2 N 0 L
+3 O 2 F
+Nothing else.

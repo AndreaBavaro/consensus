@@ -8,3 +8,5 @@ eval/
 .dbg/
 *.pem
 *.key
+runs/
+.np-cache/

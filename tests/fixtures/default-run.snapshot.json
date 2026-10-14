@@ -1,0 +1,391 @@
+{
+ "head": [
+  "meta",
+  "plan",
+  "posts",
+  "poll",
+  "plan",
+  "poll"
+ ],
+ "tail": [
+  "authors",
+  "communities",
+  "done",
+  "reasons",
+  "reasons",
+  "themes"
+ ],
+ "shapes": {
+  "meta": [
+   {
+    "cached": "boolean",
+    "id": "string",
+    "query": "string",
+    "since": "null",
+    "sources": [
+     "string"
+    ],
+    "started_at": "string",
+    "until": "null"
+   }
+  ],
+  "plan": [
+   {
+    "options": [
+     {
+      "description": "string",
+      "id": "string",
+      "is_other": "boolean",
+      "title": "string"
+     }
+    ]
+   }
+  ],
+  "posts": [
+   {
+    "posts": [
+     {
+      "author": {
+       "avatar": "null",
+       "followers": "null",
+       "handle": "string",
+       "name": "null",
+       "profile_url": "string"
+      },
+      "community": "string",
+      "created_at": "string",
+      "depth": "number",
+      "id": "string",
+      "intent": "null",
+      "kind": "string",
+      "option": "string",
+      "rank": "number",
+      "relevance": "number",
+      "score": "number",
+      "source": "string",
+      "strength": "number",
+      "text": "string",
+      "thread_title": "string",
+      "thread_url": "string",
+      "url": "string"
+     }
+    ]
+   }
+  ],
+  "poll": [
+   {
+    "final": "boolean",
+    "leads": {
+     "frustrated": "number",
+     "just_bought": "number",
+     "looking": "number",
+     "switching": "number",
+     "total": "number"
+    },
+    "options": [
+     {
+      "by_source": {
+       "reddit": "number",
+       "x": "number"
+      },
+      "count": "number",
+      "description": "string",
+      "id": "string",
+      "index": "number",
+      "intents": {
+       "frustrated": "number",
+       "just_bought": "number",
+       "looking": "number",
+       "switching": "number"
+      },
+      "is_other": "boolean",
+      "leads": "number",
+      "percent": "number",
+      "title": "string",
+      "weighted_percent": "number"
+     }
+    ],
+    "pool": {
+     "author_capped": "number",
+     "collected": "number",
+     "duplicates": "number",
+     "no_stance": "number",
+     "prefiltered": "number",
+     "removed_spam": "number",
+     "sorted": "number",
+     "unsorted": "number"
+    },
+    "scanned": {
+     "reddit_posts": "number",
+     "reddit_threads": "number",
+     "total": "number",
+     "x_fetched": "number",
+     "x_kept": "number"
+    },
+    "sources": {
+     "reddit": {
+      "opinions": "number",
+      "threads": "number"
+     },
+     "x": {
+      "opinions": "number",
+      "posts": "number"
+     }
+    },
+    "total_opinions": "number"
+   }
+  ],
+  "authors": [
+   {
+    "profiles": {
+     "user0": {
+      "avatar": "string"
+     },
+     "user1": {
+      "avatar": "string"
+     },
+     "user10": {
+      "avatar": "string"
+     },
+     "user11": {
+      "avatar": "string"
+     },
+     "user13": {
+      "avatar": "string"
+     },
+     "user14": {
+      "avatar": "string"
+     },
+     "user16": {
+      "avatar": "string"
+     },
+     "user17": {
+      "avatar": "string"
+     },
+     "user18": {
+      "avatar": "string"
+     },
+     "user2": {
+      "avatar": "string"
+     },
+     "user20": {
+      "avatar": "string"
+     },
+     "user3": {
+      "avatar": "string"
+     },
+     "user4": {
+      "avatar": "string"
+     },
+     "user6": {
+      "avatar": "string"
+     },
+     "user7": {
+      "avatar": "string"
+     },
+     "user8": {
+      "avatar": "string"
+     }
+    },
+    "source": "string"
+   }
+  ],
+  "communities": [
+   {
+    "communities": {
+     "r/PortugalExpats": {
+      "color": "null",
+      "icon": "null",
+      "subscribers": "number",
+      "url": "string"
+     }
+    }
+   }
+  ],
+  "reasons": [
+   {
+    "option_id": "string",
+    "points": [
+     {
+      "post_id": "string",
+      "quote": "string",
+      "text": "string",
+      "url": "string"
+     }
+    ],
+    "summary": "string"
+   }
+  ],
+  "themes": [
+   {
+    "themes": []
+   }
+  ],
+  "done": [
+   {
+    "calls": {
+     "llm": "number",
+     "llm_failed": "number",
+     "reddit_failed": "number",
+     "reddit_threads": "number",
+     "serper": "number",
+     "x": "number",
+     "x_failed": "number",
+     "x_retries": "number"
+    },
+    "cost": {
+     "llm_usd": "number",
+     "serper_usd": "number",
+     "total_usd": "number",
+     "x_usd": "number"
+    },
+    "count_issues": {
+     "poll": "number",
+     "themes_fixed": "number"
+    },
+    "coverage": "number",
+    "id": "string",
+    "models": {
+     "options": "string",
+     "reasons": "string",
+     "sort": "string"
+    },
+    "poll": {
+     "leads": "number",
+     "total_opinions": "number"
+    },
+    "pool": {
+     "author_capped": "number",
+     "collected": "number",
+     "duplicates": "number",
+     "no_stance": "number",
+     "prefiltered": "number",
+     "removed_spam": "number",
+     "sorted": "number",
+     "unsorted": "number"
+    },
+    "quality": {
+     "flags": [
+      "string"
+     ],
+     "purchasable": "boolean"
+    },
+    "reddit_pool": {
+     "fetched": "number",
+     "found": "number",
+     "kept_by_filter": "null"
+    },
+    "searches": {
+     "reddit": [
+      "string"
+     ],
+     "x": []
+    },
+    "status": "string",
+    "timing": "object",
+    "total_ms": "number",
+    "x_pool": "null"
+   }
+  ]
+ },
+ "poll": [
+  [
+   "No regrets",
+   10,
+   62.5
+  ],
+  [
+   "Regret it",
+   6,
+   37.5
+  ],
+  [
+   "Other",
+   0,
+   0
+  ]
+ ],
+ "posts": [
+  [
+   "t3_abc123",
+   "o0",
+   3
+  ],
+  [
+   "t1_c1",
+   "o0",
+   3
+  ],
+  [
+   "t1_c2",
+   "o1",
+   3
+  ],
+  [
+   "t1_c3",
+   "o0",
+   3
+  ],
+  [
+   "t1_c4",
+   "o1",
+   3
+  ],
+  [
+   "t1_c6",
+   "o0",
+   3
+  ],
+  [
+   "t1_c7",
+   "o1",
+   3
+  ],
+  [
+   "t1_c8",
+   "o0",
+   3
+  ],
+  [
+   "t1_c10",
+   "o1",
+   3
+  ],
+  [
+   "t1_c11",
+   "o0",
+   3
+  ],
+  [
+   "t1_c13",
+   "o1",
+   3
+  ],
+  [
+   "t1_c14",
+   "o0",
+   3
+  ],
+  [
+   "t1_c16",
+   "o0",
+   3
+  ],
+  [
+   "t1_c17",
+   "o1",
+   3
+  ],
+  [
+   "t1_c18",
+   "o0",
+   3
+  ],
+  [
+   "t1_c20",
+   "o0",
+   3
+  ]
+ ],
+ "status": "thin"
+}

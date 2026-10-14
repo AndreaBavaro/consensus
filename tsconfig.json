@@ -13,5 +13,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src", "netlify", "scripts", "mcp"]
+  "include": ["src", "netlify", "scripts", "mcp", "tests"]
 }
