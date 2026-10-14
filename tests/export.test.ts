@@ -118,7 +118,7 @@ test("np-export: extracted experiences, draft themes without numbers, and the si
   const { exportMarkdown, sidecarFor } = await import("../src/np/export.ts");
   const md = exportMarkdown([loadRun(extractRun)], { quoteStart: 1 });
   assert.match(md, /## Extracted experiences/);
-  assert.match(md, /\| First AIMA residence appointment \| long wait \| 2 \| 2 \| 2 \| lawyer \(2\) \|/);
+  assert.match(md, /\| First AIMA residence appointment \| long wait \| 2 \| 2 \| 2 \| lawyer \(2\) \| lawyer \(2\) \|/);
   assert.match(md, /- Waited most of a year for AIMA; a lawyer got the slot \(1\)\. https:\/\/www\.reddit\.com/);
   const themes = md.slice(md.indexOf("## Themes for publication"), md.indexOf("##", md.indexOf("## Themes for publication") + 5));
   assert.match(themes, /First AIMA residence appointment: long waits\. A fix movers describe: hiring a lawyer\./);
@@ -140,4 +140,13 @@ test("themes skip 'waited' and 'other' as the fix; paid help shows unknown worth
   assert.match(md, /First AIMA residence appointment: long waits\.\n/);
   assert.ok(!md.includes("waiting it out"));
   assert.match(md, /lawyer \(1; worth it \+ 0 \/ - 0 \/ ~ 0 \/ unknown 1\)/);
+});
+
+test("incident table names every code in words and shows what people tried", async () => {
+  const { exportMarkdown } = await import("../src/np/export.ts");
+  const run = JSON.parse(JSON.stringify(extractRun));
+  run.events.find((e: any) => e.event === "extract").data.records[0].incidents[0].what = "no_response";
+  const md = exportMarkdown([loadRun(run)], { quoteStart: 1 });
+  assert.match(md, /\| Step \| What went wrong \| Threads \| Posts \| Last 24 months \| Worked \| Tried \|/);
+  assert.match(md, /\| First AIMA residence appointment \| no response from the office \| 1 \| 1 \| 1 \| lawyer \(1\) \| lawyer \(1\) \|/);
 });

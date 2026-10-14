@@ -125,7 +125,8 @@ const extractRecordsOf = (r: LoadedRun): ExtractRecord[] => r.events.filter((e) 
 
 const WHAT_LABEL: Record<string, string> = {
   wrong_order: "steps done in the wrong order", missed_deadline: "missed deadlines", wrong_document: "wrong or missing documents", no_appointment: "no appointments available",
-  long_wait: "long waits", refused_by_office: "refusals at the office", inconsistent_officials: "officials giving different answers", lost_status_while_waiting: "status lapsing while waiting",
+  long_wait: "long waits", no_response: "no response from the office", status_reversed: "a decision reversed", card_not_delivered: "the card never arriving", cannot_travel: "being unable to travel while waiting",
+  portal_error: "online portal errors", paid_help_failed: "paid help that did not deliver", refused_by_office: "refusals at the office", inconsistent_officials: "officials giving different answers", lost_status_while_waiting: "status lapsing while waiting",
   unexpected_cost: "unexpected costs", account_frozen: "frozen or closed accounts", coverage_gap: "gaps in health coverage", scam: "scams", misread_rule: "misreading the rule", other: "other problems",
 };
 const FIX_LABEL: Record<string, string> = {
@@ -143,9 +144,9 @@ function extractSection(records: ExtractRecord[]): string[] {
     "",
     `${a.first_hand_posts} first-hand posts coded from ${a.saturation.threads} threads; ${Math.round(a.saturation.new_in_last_two * 100)}% of incident types first appeared in the last two threads (lower = closer to saturation).`,
     "",
-    "| Step | What went wrong | Threads | Posts | Last 24 months | Fixes described |",
-    "|---|---|---|---|---|---|",
-    ...a.incidents.map((i) => `| ${i.step_label} | ${singular(WHAT_LABEL[i.what] ?? i.what)} | ${i.threads} | ${i.posts} | ${i.recent_posts} | ${i.fixes.map((f) => `${f.fix} (${f.posts})`).join(", ") || "-"} |`),
+    "| Step | What went wrong | Threads | Posts | Last 24 months | Worked | Tried |",
+    "|---|---|---|---|---|---|---|",
+    ...a.incidents.map((i) => `| ${i.step_label} | ${singular(WHAT_LABEL[i.what] ?? i.what)} | ${i.threads} | ${i.posts} | ${i.recent_posts} | ${i.fixes.map((f) => `${f.fix} (${f.posts})`).join(", ") || "-"} | ${i.tried.map((f) => `${f.fix} (${f.posts})`).join(", ") || "-"} |`),
     "",
     "Examples (paraphrased, internal only):",
     ...records.flatMap((r) => r.incidents.filter((i) => i.gist).map((i) => `- ${i.gist} ${r.url} (${r.created_at?.slice(0, 10) ?? "undated"}${r.rule_dependent ? ", depends on a changed rule" : ""})`)).slice(0, 30),
