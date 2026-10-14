@@ -42,8 +42,6 @@ cp .env.example .env
 | `OXYLABS_USERNAME` and `OXYLABS_PASSWORD` | A residential proxy for downloading Reddit comment threads | [oxylabs.io](https://oxylabs.io): buy Residential Proxies (pay as you go, 1 GB minimum), then create a **proxy user**. Use that user's name and password, not your dashboard login and not an API key. Enter the bare username; the code adds the `customer-` prefix |
 | `TWITTERAPI_IO_KEY` | X posts | [twitterapi.io](https://twitterapi.io). Optional: without it, ask for `sources: ["reddit"]` |
 
-Other OpenAI-compatible LLM gateways (for example Straitly) are supported when that change is merged; see `.env.example` on the main branch for `LLM_GATEWAY`.
-
 Check it works from the terminal before touching your AI tool:
 
 ```bash
