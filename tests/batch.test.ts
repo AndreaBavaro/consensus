@@ -55,3 +55,22 @@ test("re-running skips slugs already finished", async () => {
   assert.deepEqual(second.map((s) => s.query), ["q three"]);
   assert.deepEqual(r.skipped, ["q-one", "q-two"]);
 });
+
+test("afterRun spend counts toward the budget and its events are saved", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "np-batch-"));
+  const seen: SearchRequest[] = [];
+  const r = await runResearchBatch({
+    lines: ["q one", "q two"],
+    outDir: dir,
+    budgetUsd: 0.05,
+    store: "links",
+    run: fakeRun(0.01, seen),
+    afterRun: async ({ events }) => {
+      events.push({ event: "quotes", data: { rows: [], dropped: 0 }, t_ms: 0 } as any);
+      return 0.02;
+    },
+  });
+  assert.equal(r.rows[0]!.cost, 0.03);
+  assert.equal(seen.length, 1, "second search: spent 0.03 + max 0.03 > 0.05");
+  assert.ok(readFileSync(join(dir, r.rows[0]!.file), "utf8").includes('"quotes"'));
+});

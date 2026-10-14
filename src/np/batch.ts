@@ -59,8 +59,8 @@ export interface BatchOptions {
   run: (req: SearchRequest) => AsyncIterable<V3Event>;
   /** Extra request fields every search gets (profile settings). */
   request?: Partial<SearchRequest>;
-  /** Called with each finished run before it is saved (quote paraphrases, seen-state updates). */
-  afterRun?: (run: { line: BatchLine; events: (V3Event & { t_ms: number })[] }) => Promise<Record<string, unknown> | void>;
+  /** Called with each finished run before it is saved (quote paraphrases, seen-state updates); may push events and returns any extra USD it spent. */
+  afterRun?: (run: { line: BatchLine; events: (V3Event & { t_ms: number })[] }) => Promise<number | void>;
   log?: (s: string) => void;
 }
 
@@ -92,12 +92,11 @@ export async function runResearchBatch(o: BatchOptions): Promise<{ rows: Manifes
     for await (const e of o.run(req)) events.push({ ...e, t_ms: Date.now() - t0 });
     const d = events.find((e) => e.event === "done")?.data as any;
     const poll = [...events].reverse().find((e) => e.event === "poll")?.data as any;
-    const cost = runCost(d);
+    const cost = runCost(d) + Number((await o.afterRun?.({ line, events })) ?? 0);
     spent += cost;
     maxCost = Math.max(maxCost, cost);
-    const extra = (await o.afterRun?.({ line, events })) ?? {};
     const file = `${slug}.json`;
-    await saveRun(join(o.outDir, file), { query: line.query, since: line.since, until: line.until, events, ...extra }, o.store);
+    await saveRun(join(o.outDir, file), { query: line.query, since: line.since, until: line.until, events }, o.store);
     const row: ManifestRow = { slug, query: line.query, since: line.since ?? null, until: line.until ?? null, status: d?.status ?? "error", cost, opinions: poll?.total_opinions ?? 0, file, finished_at: new Date().toISOString() };
     await appendFile(join(o.outDir, "manifest.jsonl"), `${JSON.stringify(row)}\n`);
     rows.push(row);

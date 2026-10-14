@@ -10,6 +10,7 @@ import { runV3 } from "../src/v3/run.ts";
 import { profileRequest, resolveProfile } from "../src/v3/profile.ts";
 import { saveRun } from "../src/np/links.ts";
 import { runResearchBatch } from "../src/np/batch.ts";
+import { addQuotes } from "../src/np/quotes.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")) as [string, string][]);
@@ -58,6 +59,7 @@ if (args.batch && profile.research) {
     sources: args.sources ? sources : ["reddit"],
     request: profileRequest(profile),
     run: (req) => runV3(req),
+    afterRun: profile.tags && profile.quotesPerOption > 0 ? ({ line, events }) => addQuotes(line.query, events, profile.quotesPerOption) : undefined,
     log: (l) => console.log(l),
   });
   console.log(`spent $${r.spent.toFixed(4)}${r.stopped ? ` (stopped: ${r.stopped})` : ""}, ${r.rows.length} run, ${r.skipped.length} skipped`);
@@ -100,6 +102,10 @@ if (args.batch && profile.research) {
 } else {
   const r = await one(words.join(" ") || "is hubspot worth it for a small business", args.since, args.until, "quiet" in args);
   const events = r.events.map(({ t, ...e }) => ({ ...e, t_ms: t }));
+  if (profile.tags && profile.quotesPerOption > 0) {
+    const usd = await addQuotes(r.query, events, profile.quotesPerOption);
+    console.log(`quote bank: ${(events.at(-1)!.data as any).rows.length} rows, $${usd} for paraphrases`);
+  }
   if (args.out && researchWriter) await saveRun(args.out, { query: r.query, since: r.since, until: args.until, events }, profile.store);
   else if (args.out) await writeFile(args.out, JSON.stringify(events, null, 1));
 }
