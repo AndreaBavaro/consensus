@@ -139,13 +139,14 @@ origin: where the poster comes from: CA, US, UK, EU, OT (other), -.
 dest: the country they moved to or plan to move to: IT, IE, PT, ES, FR, OT (other), -.
 phase: P = planning, A = arriving (first weeks), Y = first year, E = settled (over a year), R = returned home, X = leaving Canada (the Canada side of the move), -.
 lang: the post's language as two lowercase letters (en, it, pt, es, fr ...).
+own: X = the poster describes their OWN concrete steps, a problem they hit, a workaround that worked, a decision they made, or help they paid for (even if it is not a vote); - otherwise.
 `;
 const OUT_DEFAULT = /Output exactly one line per post[\s\S]*$/;
-const OUT_TAGS = `Output exactly one line per post, in order, as "<index> <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang>", e.g.
-0 1 3 S CA PT Y en
-1 S 0 - - - - en
-2 N 0 L - IT E it
-3 O 2 H US ES P en
+const OUT_TAGS = `Output exactly one line per post, in order, as "<index> <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang> <own>", e.g.
+0 1 3 S CA PT Y en X
+1 S 0 - - - - en -
+2 N 0 S CA IT A en X
+3 O 2 H US ES P en -
 Nothing else.`;
 
 export function sortPrompt(query: string, options: Option[], posts: RawPost[], tags = false): string {
@@ -216,11 +217,11 @@ export function sortPromptCot(query: string, options: Option[], posts: RawPost[]
     return sortPrompt(query, options, posts, true).replace(
       TAIL_RE,
       `For each post, first write in 2 to 8 words what this poster would answer to "${query.replace(/\$/g, "")}" (or "no answer"), then the label.
-Output exactly one line per post, in order, as "<index> | <their answer> | <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang>". The bucket is the NUMBER of the poll option above whose title matches their answer (check the list each time). Format example (the option numbers here are placeholders, not this poll's):
-0 | <answer matching option 1> | 1 3 S CA PT Y en
-1 | no answer, an ad | S 0 - - - - en
-2 | no answer, asking for help | N 0 S CA IT P en
-3 | prefers a third option | O 2 H US ES E en
+Output exactly one line per post, in order, as "<index> | <their answer> | <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang> <own>". The bucket is the NUMBER of the poll option above whose title matches their answer (check the list each time). Format example (the option numbers here are placeholders, not this poll's):
+0 | <answer matching option 1> | 1 3 S CA PT Y en X
+1 | no answer, an ad | S 0 - - - - en -
+2 | no answer, describes their permit steps | N 0 S CA IT A en X
+3 | prefers a third option | O 2 H US ES E en -
 Nothing else.`,
     );
   return sortPrompt(query, options, posts).replace(
@@ -247,7 +248,7 @@ function titleMatch(answer: string, titles: string[]): number {
 }
 
 const LINE_RE = /^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([LWFBlwfb-])\s*$/gm;
-const TAG_LINE_RE = /^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([SLHslh-])\s+([A-Za-z]{2}|-)\s+([A-Za-z]{2}|-)\s+([PAYERXpayerx-])\s+([A-Za-z]{2}|-)\s*$/gm;
+const TAG_LINE_RE = /^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([SLHslh-])\s+([A-Za-z]{2}|-)\s+([A-Za-z]{2}|-)\s+([PAYERXpayerx-])\s+([A-Za-z]{2}|-)(?:\s+([Xx-]))?\s*$/gm;
 const ORIGINS = new Set(["CA", "US", "UK", "EU", "OT"]);
 const DESTS = new Set(["IT", "IE", "PT", "ES", "FR", "OT"]);
 const code = (v: string, set: Set<string>) => (v === "-" ? "-" : set.has(v.toUpperCase()) ? v.toUpperCase() : "OT");
@@ -279,6 +280,7 @@ export function parseLabels(text: string, n: number, k: number, titles?: string[
     }
     if (tags) {
       const t = { firsthand: m[5]!.toUpperCase(), origin: code(m[6]!, ORIGINS), dest: code(m[7]!, DESTS), phase: m[8]!.toUpperCase(), lang: m[9] === "-" ? "-" : m[9]!.toLowerCase() } as PostTags;
+      if (m[10]) t.own = m[10].toUpperCase() === "X";
       out[i] = { bucket, strength, intent: null, tags: t };
       continue;
     }

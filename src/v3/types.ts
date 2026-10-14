@@ -55,6 +55,8 @@ export interface PostTags {
   phase: "P" | "A" | "Y" | "E" | "R" | "X" | "-";
   /** Two-letter language code, or "-". */
   lang: string;
+  /** The poster describes their own concrete steps, a problem, a workaround, a decision or paid help (extraction candidate). */
+  own?: boolean;
 }
 
 /** A sorted post as streamed in `posts` events. Only posts with a stance or a lead intent are streamed. */

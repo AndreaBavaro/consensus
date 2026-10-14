@@ -63,3 +63,15 @@ test("a tagged run streams tags, no leads, and the final poll has subsets and re
     net.restore();
   }
 });
+
+test("research sorter line carries an optional own-experience column", () => {
+  const p = sortPrompt(Q, OPTS, golden(), true);
+  assert.ok(p.includes("<firsthand> <origin> <dest> <phase> <lang> <own>"));
+  assert.ok(sortPromptCot(Q, OPTS, golden(), true).includes("<lang> <own>"));
+  const got = parseLabels("0 N 0 S CA PT A en X\n1 0 3 S CA PT Y en -\n2 1 2 H - IT X it", 3, 2, undefined, true);
+  assert.equal(got[0]!.tags!.own, true);
+  assert.equal(got[0]!.bucket, "none");
+  assert.equal(got[1]!.tags!.own, false);
+  // A model that leaves the column off still parses; own is then unknown.
+  assert.equal(got[2]!.tags!.own, undefined);
+});
