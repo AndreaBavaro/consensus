@@ -191,10 +191,17 @@ export interface FetchedThread {
 }
 
 /** One thread with its whole comment tree (Reddit nests replies in the same response), tagged with depth. */
-export async function fetchThread(id: string, window: { sinceEpoch: number; untilEpoch: number }): Promise<FetchedThread | null> {
+/** Adds a proxied response's size to the run's meter (decoded JSON bytes; the proxy bills transfer, so this is an estimate). */
+const meterBytes = (raw: unknown) => {
+  const m = meter();
+  if (m && raw) m.oxylabsBytes += Buffer.byteLength(JSON.stringify(raw));
+};
+
+export async function fetchThread(id: string, window: { sinceEpoch: number; untilEpoch: number }, fetchListing: (id: string) => Promise<unknown> = fetchPostListing): Promise<FetchedThread | null> {
   const m = meter();
   if (m) m.redditFetches++;
-  const raw = (await fetchPostListing(id)) as [any, any] | null;
+  const raw = (await fetchListing(id)) as [any, any] | null;
+  meterBytes(raw);
   const post = raw?.[0]?.data?.children?.[0]?.data;
   if (!post) {
     if (m) m.redditFailed++;
@@ -358,6 +365,7 @@ export async function fetchRedditProfiles(handles: string[], budgetMs: number): 
     todo.map((h) =>
       gate.run(async () => {
         const raw = (await within(fetchRedditPath(`/user/${encodeURIComponent(h)}/about?raw_json=1`), budgetMs, null)) as { data?: any } | null;
+        meterBytes(raw);
         const d = raw?.data;
         if (!d) return;
         const avatar = String(d.snoovatar_img || d.icon_img || "").split("?")[0] || defaultSnoo(h);
@@ -387,6 +395,7 @@ export async function fetchSubredditInfo(names: string[], budgetMs: number): Pro
       gate.run(async () => {
         const sub = n.replace(/^r\//, "");
         const raw = (await fetchRedditPath(`/r/${encodeURIComponent(sub)}/about?raw_json=1`)) as { data?: any } | null;
+        meterBytes(raw);
         const d = raw?.data;
         if (!d) return;
         const icon = String(d.community_icon || d.icon_img || "").split("?")[0] || null;

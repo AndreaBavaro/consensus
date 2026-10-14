@@ -35,10 +35,10 @@ const OPTIONS_AT_MS = Number(process.env.OPTIONS_AT_MS ?? 6_500);
 /** The whole options chain (sample call, then the from-question fallbacks) gives up after this; generic options follow. */
 const OPTIONS_FALLBACK_MS = Number(process.env.OPTIONS_FALLBACK_MS ?? 20_000);
 const SORT_DEADLINE_MS = Number(process.env.SORT_DEADLINE_MS ?? 40_000);
-const SPLIT_LATEST_MS = 36_000;
+export const SPLIT_LATEST_MS = Number(process.env.SPLIT_LATEST_MS ?? 36_000);
 /** Second Other pass runs only when Other is still above this share, and never starts after this point. */
 const DEEPEN_OTHER_SHARE = Number(process.env.DEEPEN_OTHER_SHARE ?? 0.3);
-const DEEPEN_LATEST_MS = 40_000;
+export const DEEPEN_LATEST_MS = Number(process.env.DEEPEN_LATEST_MS ?? 40_000);
 const FINISH_BY_MS = Number(process.env.FINISH_BY_MS ?? 52_000);
 const POLL_EVERY_MS = 700;
 /** Options backed by fewer opinions (or a smaller share) than this are folded into Other in the final poll. */
@@ -153,7 +153,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   let budgetStop = false;
   const overBudget = () => {
     if (req.budgetUsd === undefined || budgetStop) return budgetStop;
-    if (m.llmUsd + m.xUsd + m.serperCredits * 0.001 >= req.budgetUsd) {
+    if (m.llmUsd + m.xUsd + m.serperCredits * 0.001 + (proxyCost(m).oxylabs_usd ?? 0) >= req.budgetUsd) {
       budgetStop = true;
       log.warn("budget reached; finishing with what is in", { budget_usd: req.budgetUsd });
       abort.abort();
@@ -396,7 +396,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const inflight = new Set<Promise<void>>();
     const sortDeadline = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1_000, SORT_DEADLINE_MS - elapsed()))]);
     // KAN-408: on "best X" questions every opinion's named pick(s) are written down while sorting goes on.
-    const tallyOn = qtype === "best_x" && process.env.PICKS !== "0";
+    const tallyOn = qtype === "best_x" && process.env.PICKS !== "0" && !req.lean;
     const pickOf = new Map<string, PostPick>();
     let pickQueue: RawPost[] = [];
     const pickJobs = new Set<Promise<void>>();
@@ -476,13 +476,14 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const lanes = [...byOption.values()].map((l) => l.sort((a, b) => b.rank - a.rank));
     const ordered: Post[] = visibleReddit.filter((p) => p.intent);
     for (let i = 0; lanes.some((l) => i < l.length); i++) for (const l of lanes) { const p = l[i]; if (p) ordered.push(p); }
-    const leadHandles = [...new Set(ordered.map((p) => p.author.handle))].slice(0, Number(process.env.R_PROFILE_MAX ?? 200));
+    // Research runs skip avatars, karma and subreddit icons: they only decorate the web UI.
+    const leadHandles = req.lean ? [] : [...new Set(ordered.map((p) => p.author.handle))].slice(0, Number(process.env.R_PROFILE_MAX ?? 200));
     const profileJob = leadHandles.length
       ? deps.fetchRedditProfiles(leadHandles, EXTRAS_MS).then((profiles) => {
           if (Object.keys(profiles).length) emit({ event: "authors", data: { source: "reddit", profiles } });
         })
       : Promise.resolve();
-    const subs = [...new Set([...shown.values()].filter((p) => p.source === "reddit" && p.community).map((p) => p.community!))].slice(0, 40);
+    const subs = req.lean ? [] : [...new Set([...shown.values()].filter((p) => p.source === "reddit" && p.community).map((p) => p.community!))].slice(0, 40);
     const subJob = subs.length
       ? deps.fetchSubredditInfo(subs, EXTRAS_MS).then((communities) => {
           if (Object.keys(communities).length) emit({ event: "communities", data: { communities } });
@@ -653,7 +654,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
             .map((p) => p.author.handle),
         ),
       ),
-    ].filter((h) => !asked.has(h));
+    ].filter((h) => !asked.has(h) && !req.lean);
     const lateProfileJob = lateHandles.length
       ? deps.fetchRedditProfiles(lateHandles, 2_500).then((profiles) => {
           if (Object.keys(profiles).length) emit({ event: "authors", data: { source: "reddit", profiles } });
@@ -700,7 +701,9 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     mark("reasons_done");
 
     stage = "done";
-    const cost = { llm_usd: round(m.llmUsd), x_usd: round(m.xUsd), serper_usd: round(m.serperCredits * 0.001), total_usd: round(m.llmUsd + m.xUsd + m.serperCredits * 0.001) };
+    const cost: Record<string, number | null> = { llm_usd: round(m.llmUsd), x_usd: round(m.xUsd), serper_usd: round(m.serperCredits * 0.001), total_usd: round(m.llmUsd + m.xUsd + m.serperCredits * 0.001) };
+    // Proxy traffic is reported on research runs or when a price is configured; total_usd stays LLM + X + Serper as before.
+    if (req.lean || OXYLABS_USD_PER_GB() !== null) Object.assign(cost, proxyCost(m));
     // "thin" lets the UI show a "not much data for this question" note instead of a misleading poll.
     const status = finalPoll.total_opinions === 0 ? "empty" : finalPoll.total_opinions < 20 ? "thin" : "ok";
     // A provider outage is an error, never "empty": "empty" means the question found no opinions.
@@ -775,6 +778,17 @@ function xPoolStats(info: Awaited<ReturnType<typeof collectX>> | null, shown: Ma
 }
 
 const round = (n: number) => Math.round(n * 10_000) / 10_000;
+
+/** OXYLABS_USD_PER_GB (unset = no USD estimate for proxy traffic). */
+const OXYLABS_USD_PER_GB = () => {
+  const v = process.env.OXYLABS_USD_PER_GB?.trim();
+  return v && Number.isFinite(Number(v)) ? Number(v) : null;
+};
+function proxyCost(m: Meter): { oxylabs_gb: number; oxylabs_usd: number | null } {
+  const gb = m.oxylabsBytes / 1e9;
+  const price = OXYLABS_USD_PER_GB();
+  return { oxylabs_gb: Math.round(gb * 1e6) / 1e6, oxylabs_usd: price === null ? null : round(gb * price) };
+}
 
 /** Eval only: writes the frozen pool and the live plan inputs so options/sort/themes can be replayed without X/Reddit. */
 async function dumpPool(dir: string, d: { req: SearchRequest; pool: RawPost[]; arrivedAt: Map<string, number>; sampleIds: string[]; liveBase: { title: string; description: string }[]; purchasable: boolean; labels: Map<string, unknown>; threads: number; dropped: unknown; timing: unknown; x_raw: number | null }) {

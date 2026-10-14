@@ -166,6 +166,8 @@ export interface SearchRequest {
   subs?: string[];
   denySubs?: string[];
   lang?: string[];
+  /** Research runs: skip author profiles, subreddit icons and the "best X" pick tally; report proxy traffic in done.cost. */
+  lean?: boolean;
 }
 
 export interface V3Event {

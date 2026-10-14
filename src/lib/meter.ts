@@ -15,6 +15,8 @@ export interface Meter {
   serperOk: number;
   redditFetches: number;
   redditFailed: number;
+  /** Size of Reddit responses read through the proxy (decoded JSON, an estimate of billed traffic). */
+  oxylabsBytes: number;
 }
 
 export const newMeter = (): Meter => ({
@@ -30,6 +32,7 @@ export const newMeter = (): Meter => ({
   serperOk: 0,
   redditFetches: 0,
   redditFailed: 0,
+  oxylabsBytes: 0,
 });
 
 export const meterStore = new AsyncLocalStorage<Meter>();
