@@ -148,6 +148,17 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   const untilEpoch = req.until ? Date.parse(`${req.until}T00:00:00Z`) / 1000 + 86_400 : Number.POSITIVE_INFINITY;
   const window = { since: req.since, until: req.until, sinceEpoch, untilEpoch };
   const id = searchId(req);
+  // Research runs (req.budgetUsd): once spend reaches the cap, collection and sorting stop and the run finishes with what it has.
+  let budgetStop = false;
+  const overBudget = () => {
+    if (req.budgetUsd === undefined || budgetStop) return budgetStop;
+    if (m.llmUsd + m.xUsd + m.serperCredits * 0.001 >= req.budgetUsd) {
+      budgetStop = true;
+      log.warn("budget reached; finishing with what is in", { budget_usd: req.budgetUsd });
+      abort.abort();
+    }
+    return budgetStop;
+  };
   emit({ event: "meta", data: { id, query: req.query, since: req.since ?? null, until: req.until ?? null, sources: req.sources, cached: false, started_at: new Date(t0).toISOString() } });
 
   // ------------------------------------------------------------ pool
@@ -241,7 +252,10 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
         pool: pool.length,
       },
     });
-  const ticker = setInterval(progress, 1_000);
+  const ticker = setInterval(() => {
+    overBudget();
+    progress();
+  }, 1_000);
 
   try {
     // ---------------------------------------------------------- buckets
@@ -398,7 +412,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     };
     const runBatch = (batch: RawPost[]) => {
       const job = llmGate
-        .run(() => (sortDeadline.aborted ? Promise.resolve(new Array(batch.length)) : sortBatch(req.query, options, batch, sortDeadline)))
+        .run(() => (sortDeadline.aborted || overBudget() ? Promise.resolve(new Array(batch.length)) : sortBatch(req.query, options, batch, sortDeadline)))
         .then((got) => {
           const fresh: Post[] = [];
           batch.forEach((p, i) => {
@@ -702,6 +716,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     if (want("reddit") && !(redditInfo as any)?.threadsFetched) flags.push("reddit_empty");
     if (m.xRetries > 40) flags.push("x_retries");
     if (m.llmUsd + m.xUsd > 1) flags.push("cost_spike");
+    if (budgetStop) flags.push("budget_stop");
     if (flags.length) log.info("quality flags", { query: req.query, flags });
     if (process.env.DUMP_POOL) await dumpPool(process.env.DUMP_POOL, { req, pool, arrivedAt, sampleIds, liveBase, purchasable, labels, threads: threads.size, dropped, timing, x_raw: (xInfo as any)?.raw ?? null });
     emit({

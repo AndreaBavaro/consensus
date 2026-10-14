@@ -140,6 +140,8 @@ export interface SearchRequest {
   until?: string;
   sources: V3Source[];
   signal?: AbortSignal;
+  /** Research runs: stop collecting and sorting once this much (USD) has been spent. Unset = no cap (today's behaviour). */
+  budgetUsd?: number;
 }
 
 export interface V3Event {

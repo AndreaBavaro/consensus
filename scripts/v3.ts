@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { runV3 } from "../src/v3/run.ts";
 import { resolveProfile } from "../src/v3/profile.ts";
 import { saveRun } from "../src/np/links.ts";
+import { runResearchBatch } from "../src/np/batch.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")) as [string, string][]);
@@ -45,7 +46,20 @@ async function one(query: string, since?: string, until?: string, quiet = false)
   return { query, since, events };
 }
 
-if (args.batch) {
+if (args.batch && profile.research) {
+  // Research batch: one at a time, Reddit only unless --sources, budget stop, manifest.jsonl, resume by slug.
+  const lines = (await readFile(args.batch, "utf8")).split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+  const r = await runResearchBatch({
+    lines,
+    outDir: args["out-dir"] ?? "runs/np",
+    budgetUsd: args["budget-usd"] !== undefined ? Number(args["budget-usd"]) : undefined,
+    store: profile.store,
+    sources: args.sources ? sources : ["reddit"],
+    run: (req) => runV3(req),
+    log: (l) => console.log(l),
+  });
+  console.log(`spent $${r.spent.toFixed(4)}${r.stopped ? ` (stopped: ${r.stopped})` : ""}, ${r.rows.length} run, ${r.skipped.length} skipped`);
+} else if (args.batch) {
   const lines = (await readFile(args.batch, "utf8")).split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
   const dir = args["out-dir"] ?? "runs/v3";
   await mkdir(dir, { recursive: true });
