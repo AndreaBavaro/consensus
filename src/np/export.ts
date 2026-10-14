@@ -131,7 +131,7 @@ const WHAT_LABEL: Record<string, string> = {
 };
 const FIX_LABEL: Record<string, string> = {
   lawyer: "hiring a lawyer", agency_fixer: "using an agency or fixer", went_in_person: "going in person", other_office: "trying another office", called_or_emailed_repeatedly: "calling or emailing repeatedly",
-  booked_before_flying: "booking before flying", used_receipt: "relying on the application receipt", escalated_complaint: "escalating a complaint", changed_route: "changing route", waited: "waiting it out",
+  booked_before_flying: "booking before flying", used_receipt: "relying on the application receipt", escalated_complaint: "escalating a complaint", requested_written_proof: "asking for written proof", ombudsman: "going to the ombudsman", appeal: "filing an appeal", court_action: "taking court action", tacit_approval: "relying on tacit approval", resubmitted: "resubmitting the application", changed_route: "changing route", waited: "waiting it out",
   local_help: "help from a local", online_portal: "using the online portal", paid_private: "paying for a private option", other: "another workaround",
 };
 const singular = (s: string) => s.replace(/^long waits$/, "long wait");
