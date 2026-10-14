@@ -87,3 +87,16 @@ test("requestFor adds per-question request fields (seen ids, since-last); a line
   });
   assert.deepEqual(seen.map((s) => [s.skipIds, s.since]), [[["seen-q one"], "2026-09-14"], [["seen-q two"], "2024-01-01"]]);
 });
+
+test("a batch stops after two failed runs in a row (error, or empty with posts collected)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "np-batch-"));
+  const seen: SearchRequest[] = [];
+  const failing = async function* (req: SearchRequest) {
+    seen.push(req);
+    yield { event: "poll", data: { final: true, total_opinions: 0, options: [] } };
+    yield { event: "done", data: { status: "empty", pool: { collected: 300, sorted: 0 }, cost: { total_usd: 0.02 } } };
+  } as any;
+  const r = await runResearchBatch({ lines: ["a", "b", "c", "d"], outDir: dir, store: "links", run: failing });
+  assert.equal(seen.length, 2);
+  assert.equal(r.stopped, "failing");
+});

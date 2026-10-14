@@ -41,6 +41,16 @@ export const SPLIT_LATEST_MS = Number(process.env.SPLIT_LATEST_MS ?? 36_000);
 const DEEPEN_OTHER_SHARE = Number(process.env.DEEPEN_OTHER_SHARE ?? 0.3);
 export const DEEPEN_LATEST_MS = Number(process.env.DEEPEN_LATEST_MS ?? 40_000);
 const FINISH_BY_MS = Number(process.env.FINISH_BY_MS ?? 52_000);
+
+/**
+ * Stage deadlines for one search. Web searches must finish inside Netlify's 60 s stream; research runs (req.lean) run
+ * from the CLI or MCP with no such limit, so a slow gateway costs time instead of an empty poll.
+ */
+export function deadlinesFor(req: Pick<SearchRequest, "lean"> & Partial<SearchRequest>) {
+  const base = { options: OPTIONS_FALLBACK_MS, sort: SORT_DEADLINE_MS, split: SPLIT_LATEST_MS, deepen: DEEPEN_LATEST_MS, finish: FINISH_BY_MS };
+  if (!req.lean) return base;
+  return { options: Math.max(base.options, 60_000), sort: Math.max(base.sort, 150_000), split: Math.max(base.split, 140_000), deepen: Math.max(base.deepen, 145_000), finish: Math.max(base.finish, 180_000) };
+}
 const POLL_EVERY_MS = 700;
 /** Options backed by fewer opinions (or a smaller share) than this are folded into Other in the final poll. */
 const MIN_OPTION_COUNT = 2;
@@ -152,6 +162,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
   const untilEpoch = req.until ? Date.parse(`${req.until}T00:00:00Z`) / 1000 + 86_400 : Number.POSITIVE_INFINITY;
   const window = { since: req.since, until: req.until, sinceEpoch, untilEpoch };
   const id = searchId(req);
+  const L = deadlinesFor(req);
   // Research runs (req.budgetUsd): once spend reaches the cap, collection and sorting stop and the run finishes with what it has.
   let budgetStop = false;
   const overBudget = () => {
@@ -287,7 +298,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const searchDead = want("reddit") && !want("x") && !collecting() && m.serperOk === 0 && !pool.length;
     const optAbort = new AbortController();
     const optSignal = AbortSignal.any([signal, optAbort.signal]);
-    const optTimer = setTimeout(() => optAbort.abort(), OPTIONS_FALLBACK_MS);
+    const optTimer = setTimeout(() => optAbort.abort(), L.options);
     try {
       if (searchDead) base = [];
       else if (sample.length >= 10) {
@@ -403,7 +414,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     };
 
     const inflight = new Set<Promise<void>>();
-    const sortDeadline = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1_000, SORT_DEADLINE_MS - elapsed()))]);
+    const sortDeadline = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1_000, L.sort - elapsed()))]);
     // KAN-408: on "best X" questions every opinion's named pick(s) are written down while sorting goes on.
     const tallyOn = qtype === "best_x" && process.env.PICKS !== "0" && !req.lean;
     const pickOf = new Map<string, PostPick>();
@@ -466,7 +477,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     };
     kickSort();
 
-    await within(Promise.all([redditTask, xTask]), SORT_DEADLINE_MS - elapsed(), undefined);
+    await within(Promise.all([redditTask, xTask]), L.sort - elapsed(), undefined);
     if (collecting()) {
       log.warn("collection still running at the sort deadline; finishing with what is in");
       abort.abort();
@@ -509,7 +520,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     let otherPickCount: number | undefined;
     if (tallyOn) {
       flushPicks(true);
-      await within(Promise.all([...pickJobs]), Math.min(PICKS_WAIT_MS, Math.max(1_500, FINISH_BY_MS - 14_000 - elapsed())), undefined);
+      await within(Promise.all([...pickJobs]), Math.min(PICKS_WAIT_MS, Math.max(1_500, L.finish - 14_000 - elapsed())), undefined);
       const opinionPosts = [...shown.values()].filter((p) => p.option);
       timing.picks_tallied = opinionPosts.filter((p) => pickOf.has(p.id)).length;
       mark("picks_done");
@@ -541,10 +552,10 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     }
     const otherPosts = optionPosts(OTHER_ID);
     const opinionTotal = [...shown.values()].filter((p) => p.option).length;
-    if (!planned && otherPosts.length >= Math.max(8, opinionTotal * 0.1) && elapsed() < SPLIT_LATEST_MS && options.length < 8) {
+    if (!planned && otherPosts.length >= Math.max(8, opinionTotal * 0.1) && elapsed() < L.split && options.length < 8) {
       const ordered = otherPosts.sort((a, b) => b.rank - a.rank);
       const byId = new Map(pool.map((r) => [r.id, r]));
-      const split = await within(splitOther(req.query, options, ordered.map((p) => byId.get(p.id)!), signal), Math.max(4_000, Math.min(8_000, FINISH_BY_MS - 8_000 - elapsed())), { added: [], assign: new Map<number, number>() });
+      const split = await within(splitOther(req.query, options, ordered.map((p) => byId.get(p.id)!), signal), Math.max(4_000, Math.min(8_000, L.finish - 8_000 - elapsed())), { added: [], assign: new Map<number, number>() });
       const targets = [...options.map((o) => o.id)];
       for (const o of split.added) {
         const opt = { ...o, id: `o${options.length}` };
@@ -566,7 +577,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const otherNow = optionPosts(OTHER_ID);
     const opinionsMid = [...shown.values()].filter((p) => p.option).length;
     timing.other_pct_before_deepen = opinionsMid ? Math.round((otherNow.length / opinionsMid) * 1000) / 10 : 0;
-    if (!planned && opinionsMid >= 40 && otherNow.length > opinionsMid * DEEPEN_OTHER_SHARE && elapsed() < DEEPEN_LATEST_MS) {
+    if (!planned && opinionsMid >= 40 && otherNow.length > opinionsMid * DEEPEN_OTHER_SHARE && elapsed() < L.deepen) {
       const ordered = otherNow.sort((a, b) => b.rank - a.rank);
       const byId = new Map(pool.map((r) => [r.id, r]));
       const t0 = elapsed();
@@ -697,7 +708,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     // ---------------------------------------------------------- reasons + lead profiles, in parallel
     stage = "writing_reasons";
     // Summaries for every option run at once; each streams as soon as it is written.
-    const budget = Math.min(8_000, FINISH_BY_MS - elapsed());
+    const budget = Math.min(8_000, L.finish - elapsed());
     const reasonJobs = [...options, other].map(async (o) => {
       const ps = optionPosts(o.id).sort((a, b) => b.rank - a.rank);
       // Strongest takes first, both sources represented.
@@ -736,7 +747,8 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const status = finalPoll.total_opinions === 0 ? "empty" : finalPoll.total_opinions < 20 ? "thin" : "ok";
     // A provider outage is an error, never "empty": "empty" means the question found no opinions.
     const errorReason =
-      llmDead || (m.llmCalls === 0 && m.llmFailed > 0)
+      // Posts came in but not one could be sorted: the model answered with nothing usable (2026-10-14 Straitly).
+      llmDead || (m.llmCalls === 0 && m.llmFailed > 0) || (!budgetStop && pool.length > 0 && sortedCount === 0)
         ? "llm_unavailable"
         : want("reddit") && m.serperOk === 0 && (!want("x") || finalPoll.total_opinions === 0)
           ? "search_unavailable"

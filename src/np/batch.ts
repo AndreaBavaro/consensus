@@ -66,7 +66,7 @@ export interface BatchOptions {
   log?: (s: string) => void;
 }
 
-export async function runResearchBatch(o: BatchOptions): Promise<{ rows: ManifestRow[]; skipped: string[]; stopped: "budget" | null; spent: number }> {
+export async function runResearchBatch(o: BatchOptions): Promise<{ rows: ManifestRow[]; skipped: string[]; stopped: "budget" | "failing" | null; spent: number }> {
   const log = o.log ?? (() => {});
   await mkdir(o.outDir, { recursive: true });
   const done = new Set((await readManifest(o.outDir)).filter((r) => FINISHED.has(r.status)).map((r) => r.slug));
@@ -74,7 +74,9 @@ export async function runResearchBatch(o: BatchOptions): Promise<{ rows: Manifes
   const skipped: string[] = [];
   let spent = 0;
   let maxCost = 0;
-  let stopped: "budget" | null = null;
+  let stopped: "budget" | "failing" | null = null;
+  // Two failed runs in a row usually mean a provider problem, not two empty questions: stop before paying for more.
+  let failedInRow = 0;
   for (const raw of o.lines) {
     const line = parseBatchLine(raw);
     const slug = slugOf(line);
@@ -103,7 +105,13 @@ export async function runResearchBatch(o: BatchOptions): Promise<{ rows: Manifes
     const row: ManifestRow = { slug, query: line.query, since: line.since ?? null, until: line.until ?? null, status: d?.status ?? "error", cost, opinions: poll?.total_opinions ?? 0, file, finished_at: new Date().toISOString() };
     await appendFile(join(o.outDir, "manifest.jsonl"), `${JSON.stringify(row)}\n`);
     rows.push(row);
+    failedInRow = row.status === "error" || (row.status === "empty" && Number(d?.pool?.collected ?? 0) > 0) ? failedInRow + 1 : 0;
     log(`${row.status.padEnd(5)} $${cost.toFixed(4)} ${row.opinions} opinions | ${line.query}`);
+    if (failedInRow >= 2) {
+      stopped = "failing";
+      log("stop  two failed runs in a row: check the LLM gateway and search keys before re-running (finished questions are skipped on resume)");
+      break;
+    }
   }
   return { rows, skipped, stopped, spent };
 }

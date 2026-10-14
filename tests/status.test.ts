@@ -65,3 +65,15 @@ test("calls succeed -> no error_reason", async () => {
     net.restore();
   }
 });
+
+test("posts collected but none sorted (LLM answers unusable) -> status error, llm_unavailable, not empty", async () => {
+  // Every call "succeeds" but returns empty content, as Straitly did on 2026-10-14.
+  const net = installFakeNet({ llm: () => "" });
+  try {
+    const d = done(await collect(runV3({ query: "Canadians who moved to Portugal, do you regret it", sources: ["reddit"] }, { collectReddit: fakeCollectReddit() as any, ...extras })));
+    assert.equal(d.status, "error");
+    assert.equal(d.error_reason, "llm_unavailable");
+  } finally {
+    net.restore();
+  }
+});

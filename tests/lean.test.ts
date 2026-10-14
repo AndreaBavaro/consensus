@@ -60,3 +60,11 @@ test("done.cost reports oxylabs_gb and oxylabs_usd on research runs; usd null wi
     net.restore();
   }
 });
+
+test("research (lean) runs get longer deadlines than the web's 60-second stream; default runs keep today's", async () => {
+  const { deadlinesFor } = await import("../src/v3/run.ts");
+  const d = deadlinesFor({ query: "q", sources: ["reddit"] });
+  assert.deepEqual([d.sort, d.finish], [40_000, 52_000]);
+  const r = deadlinesFor({ query: "q", sources: ["reddit"], lean: true });
+  assert.ok(r.sort >= 120_000 && r.finish >= r.sort + 20_000 && r.options >= 40_000);
+});
