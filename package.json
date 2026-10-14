@@ -17,7 +17,8 @@
     "eval": "tsx --env-file=.env scripts/eval.ts",
     "audit": "tsx --env-file=.env scripts/audit.ts",
     "mcp": "tsx --env-file-if-exists=.env mcp/server.ts",
-    "test": "node --import tsx --test --test-force-exit \"tests/**/*.test.ts\""
+    "test": "node --import tsx --test --test-force-exit \"tests/**/*.test.ts\"",
+    "np-export": "tsx --env-file-if-exists=.env scripts/np-export.ts"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
