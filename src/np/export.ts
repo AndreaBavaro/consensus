@@ -3,6 +3,8 @@
  * quote-bank rows, facts to verify, and the thin/empty/error log. Works offline from saved files.
  */
 import { addQuotes, formatQuoteRow, postsFromEvents, type QuoteRow } from "./quotes.ts";
+import { aggregate, toSidecar } from "./aggregate.ts";
+import type { ExtractRecord } from "./extract.ts";
 
 export interface LoadedRun {
   query: string;
@@ -92,6 +94,9 @@ export function exportMarkdown(runs: LoadedRun[], o: { quoteStart: number }): st
     if (v.quotes.dropped) out.push("", `${v.quotes.dropped} paraphrase(s) failed the check twice and were dropped.`);
   }
 
+  const records = runs.flatMap(extractRecordsOf);
+  if (records.length) out.push("", ...extractSection(records));
+
   out.push("", "## Facts to verify", "", ...(facts.length ? facts : ["None surfaced."]));
   out.push("", "## Thin, empty and error runs", "", ...(log.length ? log : ["None."]));
   return `${out.join("\n")}\n`;
@@ -114,4 +119,52 @@ export async function fillMissingQuotes(runs: LoadedRun[], o: { paraphrase: bool
     spentUsd += await addQuotes(r.query, r.events, o.perOption, o.complete);
   }
   return { spentUsd, skippedNoText };
+}
+
+const extractRecordsOf = (r: LoadedRun): ExtractRecord[] => r.events.filter((e) => e.event === "extract").flatMap((e) => e.data.records ?? []);
+
+const WHAT_LABEL: Record<string, string> = {
+  wrong_order: "steps done in the wrong order", missed_deadline: "missed deadlines", wrong_document: "wrong or missing documents", no_appointment: "no appointments available",
+  long_wait: "long waits", refused_by_office: "refusals at the office", inconsistent_officials: "officials giving different answers", lost_status_while_waiting: "status lapsing while waiting",
+  unexpected_cost: "unexpected costs", account_frozen: "frozen or closed accounts", coverage_gap: "gaps in health coverage", scam: "scams", misread_rule: "misreading the rule", other: "other problems",
+};
+const FIX_LABEL: Record<string, string> = {
+  lawyer: "hiring a lawyer", agency_fixer: "using an agency or fixer", went_in_person: "going in person", other_office: "trying another office", called_or_emailed_repeatedly: "calling or emailing repeatedly",
+  booked_before_flying: "booking before flying", used_receipt: "relying on the application receipt", escalated_complaint: "escalating a complaint", changed_route: "changing route", waited: "waiting it out",
+  local_help: "help from a local", online_portal: "using the online portal", paid_private: "paying for a private option", other: "another workaround",
+};
+const singular = (s: string) => s.replace(/^long waits$/, "long wait");
+
+/** Research-file sections for extraction: ranked incidents with fixes, paraphrased examples, and draft publication themes. */
+function extractSection(records: ExtractRecord[]): string[] {
+  const a = aggregate(records);
+  const out = [
+    "## Extracted experiences",
+    "",
+    `${a.first_hand_posts} first-hand posts coded from ${a.saturation.threads} threads; ${Math.round(a.saturation.new_in_last_two * 100)}% of incident types first appeared in the last two threads (lower = closer to saturation).`,
+    "",
+    "| Step | What went wrong | Threads | Posts | Last 24 months | Fixes described |",
+    "|---|---|---|---|---|---|",
+    ...a.incidents.map((i) => `| ${i.step_label} | ${singular(WHAT_LABEL[i.what] ?? i.what)} | ${i.threads} | ${i.posts} | ${i.recent_posts} | ${i.fixes.map((f) => `${f.fix} (${f.posts})`).join(", ") || "-"} |`),
+    "",
+    "Examples (paraphrased, internal only):",
+    ...records.flatMap((r) => r.incidents.filter((i) => i.gist).map((i) => `- ${i.gist} ${r.url} (${r.created_at?.slice(0, 10) ?? "undated"}${r.rule_dependent ? ", depends on a changed rule" : ""})`)).slice(0, 30),
+  ];
+  for (const [country, steps] of Object.entries(a.order)) out.push("", `Usual order stated by movers (${country}): ${steps.map((s) => s.step).join(" → ")}`);
+  if (a.paid_for.length) out.push("", "Paid help: " + a.paid_for.map((p) => `${p.what} (${p.posts}; worth it + ${p.worth["+"]} / - ${p.worth["-"]} / ~ ${p.worth["~"]})`).join(", "));
+  // Plain-language candidates only: no counts, no frequency words (anecdotes stay anecdotes).
+  const themes = a.incidents
+    .filter((i) => i.threads >= 2)
+    .slice(0, 8)
+    .map((i) => {
+      const fix = i.fixes[0];
+      return `- ${i.step_label}: ${WHAT_LABEL[i.what] ?? i.what}.${fix ? ` A fix movers describe: ${FIX_LABEL[fix.fix] ?? fix.fix}.` : ""}`;
+    });
+  out.push("", "## Themes for publication (draft, needs human wording)", "", ...(themes.length ? themes : ["None reported in two or more threads yet."]));
+  return out;
+}
+
+/** Sidecar for newpostcode/data/forum/<batch>.json from every extract event in the given runs. */
+export function sidecarFor(runs: LoadedRun[], batch: string, o: { timelineIds?: string[]; runDate: string }) {
+  return toSidecar(batch, aggregate(runs.flatMap(extractRecordsOf)), o);
 }
