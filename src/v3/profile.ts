@@ -62,3 +62,8 @@ export function resolveProfile(flags: Record<string, string | undefined>, env: R
   if (flags.quotes !== undefined) p.quotesPerOption = Number(flags.quotes);
   return p;
 }
+
+/** Request fields a profile switches on; the default profile adds none, so default requests are unchanged. */
+export function profileRequest(p: Profile): { tags?: boolean } {
+  return p.tags ? { tags: true } : {};
+}

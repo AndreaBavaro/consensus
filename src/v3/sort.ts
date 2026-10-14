@@ -2,7 +2,7 @@ import { env } from "../lib/env.ts";
 import { logger } from "../lib/log.ts";
 import { completeJson, completeText } from "../llm.ts";
 import { flat, within } from "./limit.ts";
-import type { Intent, RawPost, Reason } from "./types.ts";
+import type { Intent, PostTags, RawPost, Reason } from "./types.ts";
 
 const log = logger("v3-sort");
 
@@ -125,12 +125,35 @@ export interface Label {
   intent: Intent | null;
   /** How many of the three sort models gave this bucket, as a share (1 = all three, 0.67 = two, 0.5 = primary alone). */
   agree?: number;
+  /** Research profile only. */
+  tags?: PostTags;
 }
 
 const INTENT_CODE: Record<string, Intent> = { L: "looking", W: "switching", F: "frustrated", B: "just_bought" };
 export const SORT_BATCH = Number(process.env.SORT_BATCH ?? 25);
 
-export function sortPrompt(query: string, options: Option[], posts: RawPost[]): string {
+const LEAD_RE = /LEAD = a sales lead[\s\S]*?\(they are advising, not buying\)\.\n/;
+const TAGS_BLOCK = `POSTER TAGS, for every post, from what the poster says about THEMSELVES ("-" when you cannot tell):
+firsthand: S = their own experience (they moved, are moving, live there, or left), L = a local talking about their own country, H = hearsay (someone else's story, "my cousin", hypotheticals), - = none of these.
+origin: where the poster comes from: CA, US, UK, EU, OT (other), -.
+dest: the country they moved to or plan to move to: IT, IE, PT, ES, FR, OT (other), -.
+phase: P = planning, A = arriving (first weeks), Y = first year, E = settled (over a year), R = returned home, X = leaving Canada (the Canada side of the move), -.
+lang: the post's language as two lowercase letters (en, it, pt, es, fr ...).
+`;
+const OUT_DEFAULT = /Output exactly one line per post[\s\S]*$/;
+const OUT_TAGS = `Output exactly one line per post, in order, as "<index> <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang>", e.g.
+0 1 3 S CA PT Y en
+1 S 0 - - - - en
+2 N 0 L - IT E it
+3 O 2 H US ES P en
+Nothing else.`;
+
+export function sortPrompt(query: string, options: Option[], posts: RawPost[], tags = false): string {
+  const base = sortPromptBase(query, options, posts);
+  return tags ? base.replace(LEAD_RE, TAGS_BLOCK).replace(OUT_DEFAULT, OUT_TAGS) : base;
+}
+
+function sortPromptBase(query: string, options: Option[], posts: RawPost[]): string {
   const opts = options.map((o, i) => `${i} = ${o.title}: ${o.description}`).join("\n");
   const body = posts
     .map((p, i) => {
@@ -188,7 +211,18 @@ Nothing else.`;
 
 /** The prompt's final instructions, swapped for the "say their answer first" format. */
 const TAIL_RE = /Output exactly one line per post[\s\S]*$/;
-export function sortPromptCot(query: string, options: Option[], posts: RawPost[]): string {
+export function sortPromptCot(query: string, options: Option[], posts: RawPost[], tags = false): string {
+  if (tags)
+    return sortPrompt(query, options, posts, true).replace(
+      TAIL_RE,
+      `For each post, first write in 2 to 8 words what this poster would answer to "${query.replace(/\$/g, "")}" (or "no answer"), then the label.
+Output exactly one line per post, in order, as "<index> | <their answer> | <bucket> <strength> <firsthand> <origin> <dest> <phase> <lang>". The bucket is the NUMBER of the poll option above whose title matches their answer (check the list each time). Format example (the option numbers here are placeholders, not this poll's):
+0 | <answer matching option 1> | 1 3 S CA PT Y en
+1 | no answer, an ad | S 0 - - - - en
+2 | no answer, asking for help | N 0 S CA IT P en
+3 | prefers a third option | O 2 H US ES E en
+Nothing else.`,
+    );
   return sortPrompt(query, options, posts).replace(
     TAIL_RE,
     `For each post, first write in 2 to 8 words what this poster would answer to "${query.replace(/\$/g, "")}" (or "no answer"), then the label.
@@ -212,10 +246,16 @@ function titleMatch(answer: string, titles: string[]): number {
   return best;
 }
 
-function parseLabels(text: string, n: number, k: number, titles?: string[]): (Label | undefined)[] {
+const LINE_RE = /^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([LWFBlwfb-])\s*$/gm;
+const TAG_LINE_RE = /^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([SLHslh-])\s+([A-Za-z]{2}|-)\s+([A-Za-z]{2}|-)\s+([PAYERXpayerx-])\s+([A-Za-z]{2}|-)\s*$/gm;
+const ORIGINS = new Set(["CA", "US", "UK", "EU", "OT"]);
+const DESTS = new Set(["IT", "IE", "PT", "ES", "FR", "OT"]);
+const code = (v: string, set: Set<string>) => (v === "-" ? "-" : set.has(v.toUpperCase()) ? v.toUpperCase() : "OT");
+
+export function parseLabels(text: string, n: number, k: number, titles?: string[], tags = false): (Label | undefined)[] {
   const out: (Label | undefined)[] = new Array(n);
-  // Accepts both "<i> <bucket> <strength> <lead>" and "<i> | answer | <bucket> <strength> <lead>".
-  for (const m of text.matchAll(/^\s*\[?(\d+)\]?\s*[:.\-]?\s*(?:\|([^|\n]*)\|)?\s*([0-9]+|[ONSons])\s+([0-3])\s+([LWFBlwfb-])\s*$/gm)) {
+  // Accepts both "<i> <bucket> <strength> <lead>" and "<i> | answer | <bucket> <strength> <lead>" (tags mode: the five tag columns instead of lead).
+  for (const m of text.matchAll(tags ? TAG_LINE_RE : LINE_RE)) {
     const i = Number(m[1]);
     if (i >= n || out[i]) continue;
     const b = m[3]!.toUpperCase();
@@ -237,6 +277,11 @@ function parseLabels(text: string, n: number, k: number, titles?: string[]): (La
       bucket = "none";
       strength = 0;
     }
+    if (tags) {
+      const t = { firsthand: m[5]!.toUpperCase(), origin: code(m[6]!, ORIGINS), dest: code(m[7]!, DESTS), phase: m[8]!.toUpperCase(), lang: m[9] === "-" ? "-" : m[9]!.toLowerCase() } as PostTags;
+      out[i] = { bucket, strength, intent: null, tags: t };
+      continue;
+    }
     out[i] = { bucket, strength, intent: bucket === "drop" ? null : (INTENT_CODE[m[5]!.toUpperCase()] ?? null) };
   }
   return out;
@@ -251,31 +296,31 @@ function parseLabels(text: string, n: number, k: number, titles?: string[]): (La
 const VOTERS = env.llmVoters;
 const VOTER_GRACE_MS = Number(process.env.SORT_VOTER_GRACE_MS ?? 6_000);
 
-async function labelOnce(prompt: string, model: string, n: number, k: number, signal?: AbortSignal, noReasoning?: boolean, titles?: string[]): Promise<(Label | undefined)[]> {
-  const text = await completeText(prompt, { model, maxTokens: 60 * n + 300, timeoutMs: 25_000, signal, temperature: 0, ...(noReasoning ? { noReasoning } : {}) }, 0);
-  return parseLabels(text, n, k, titles);
+async function labelOnce(prompt: string, model: string, n: number, k: number, signal?: AbortSignal, noReasoning?: boolean, titles?: string[], tags = false): Promise<(Label | undefined)[]> {
+  const text = await completeText(prompt, { model, maxTokens: (tags ? 75 : 60) * n + 300, timeoutMs: 25_000, signal, temperature: 0, ...(noReasoning ? { noReasoning } : {}) }, 0);
+  return parseLabels(text, n, k, titles, tags);
 }
 
 const key = (l?: Label) => (l ? String(l.bucket) : "");
 
 /** Labels one batch; a primary batch that comes back mostly unparsed is asked once more. Missing labels stay undefined. */
-export async function sortBatch(query: string, options: Option[], posts: RawPost[], signal?: AbortSignal): Promise<(Label | undefined)[]> {
+export async function sortBatch(query: string, options: Option[], posts: RawPost[], signal?: AbortSignal, tags = false): Promise<(Label | undefined)[]> {
   const n = posts.length;
   const k = options.length;
   const voterAbort = new AbortController();
   const voterSignal = signal ? AbortSignal.any([signal, voterAbort.signal]) : voterAbort.signal;
-  const plain = sortPrompt(query, options, posts);
+  const plain = sortPrompt(query, options, posts, tags);
   const voters = VOTERS.map((model) =>
-    labelOnce(plain, model, n, k, voterSignal, true).catch((e) => {
+    labelOnce(plain, model, n, k, voterSignal, true, undefined, tags).catch((e) => {
       if (!voterSignal.aborted) log.warn("sort voter failed", { model, error: String(e).slice(0, 160) });
       return null;
     }),
   );
   let best: (Label | undefined)[] = new Array(n);
-  const cot = sortPromptCot(query, options, posts);
+  const cot = sortPromptCot(query, options, posts, tags);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const got = await labelOnce(cot, sortModel(), n, k, signal, false, options.map((o) => o.title));
+      const got = await labelOnce(cot, sortModel(), n, k, signal, false, options.map((o) => o.title), tags);
       if (got.filter(Boolean).length > best.filter(Boolean).length) best = got;
       if (best.filter(Boolean).length >= n * 0.8) break;
     } catch (e) {

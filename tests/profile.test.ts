@@ -37,3 +37,9 @@ test("unknown profile or store is an error", () => {
   assert.throws(() => resolveProfile({ profile: "nope" }, {}));
   assert.throws(() => resolveProfile({ store: "half" }, {}));
 });
+
+test("profileRequest adds nothing for the default profile and tags for newpostcode", async () => {
+  const { profileRequest } = await import("../src/v3/profile.ts");
+  assert.deepEqual(profileRequest(PROFILES.default), {});
+  assert.equal(profileRequest(PROFILES.newpostcode).tags, true);
+});

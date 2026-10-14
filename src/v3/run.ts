@@ -7,6 +7,7 @@ import { Semaphore, sleep, within } from "./limit.ts";
 import { collectReddit, fetchRedditProfiles, fetchSubredditInfo } from "./reddit.ts";
 import { collectX } from "./x.ts";
 import { buildThemes } from "./themes.ts";
+import { researchStats } from "../np/subsets.ts";
 import { countIssues, reconcileThemes } from "./counts.ts";
 import { PICKS_CHUNK, isRealPick, otherPicks, planPicks, tallyPicks, type PostPick } from "./picks.ts";
 import {
@@ -324,7 +325,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     const toPost = (p: RawPost, l: Label & { option: string | null }): Post => {
       const { created_utc, parent_text: _parent, ...rest } = p;
       // rank = how strongly it answers (strength) x engagement x recency.
-      return { ...rest, created_at: isoFromEpoch(created_utc), option: l.option, strength: l.strength, intent: l.intent, rank: Math.round(l.strength * engagement(p) * recency(p) * 100) / 100, relevance: relevanceOf(p, l, window) };
+      return { ...rest, created_at: isoFromEpoch(created_utc), option: l.option, strength: l.strength, intent: l.intent, rank: Math.round(l.strength * engagement(p) * recency(p) * 100) / 100, relevance: relevanceOf(p, l, window), ...(l.tags ? { tags: l.tags } : {}) };
     };
 
     const snapshot = (final: boolean): Poll => {
@@ -412,7 +413,7 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     };
     const runBatch = (batch: RawPost[]) => {
       const job = llmGate
-        .run(() => (sortDeadline.aborted || overBudget() ? Promise.resolve(new Array(batch.length)) : sortBatch(req.query, options, batch, sortDeadline)))
+        .run(() => (sortDeadline.aborted || overBudget() ? Promise.resolve(new Array(batch.length)) : sortBatch(req.query, options, batch, sortDeadline, req.tags)))
         .then((got) => {
           const fresh: Post[] = [];
           batch.forEach((p, i) => {
@@ -623,6 +624,11 @@ async function pipeline(req: SearchRequest, m: Meter, emit: (e: V3Event) => void
     emit(planEvent());
     if (reassigned.length) emit({ event: "posts", data: { posts: reassigned, updated: true } });
     const finalPoll = snapshot(true);
+    if (req.tags) {
+      const rs = researchStats([...shown.values()], finalPoll.options.map((o) => o.id), t0);
+      finalPoll.subsets = rs.subsets;
+      for (const o of finalPoll.options) o.recent_share = rs.recent_share[o.id] ?? 0;
+    }
     if (planned) {
       // Named picks still inside Other (including folded options' posts), aliases merged.
       const names = optionPosts(OTHER_ID).flatMap((p) => {

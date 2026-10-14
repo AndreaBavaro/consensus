@@ -7,15 +7,16 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { runV3 } from "../src/v3/run.ts";
-import { resolveProfile } from "../src/v3/profile.ts";
+import { profileRequest, resolveProfile } from "../src/v3/profile.ts";
 import { saveRun } from "../src/np/links.ts";
 import { runResearchBatch } from "../src/np/batch.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")) as [string, string][]);
 const words = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-const sources = (args.sources ?? "reddit,x").split(",") as V3Source[];
 const profile = resolveProfile(args);
+// Research runs are Reddit only unless --sources says otherwise.
+const sources = (args.sources ?? (profile.research ? "reddit" : "reddit,x")).split(",") as V3Source[];
 /** Today's file formats are kept unless a profile or --store asks for the research writer. */
 const researchWriter = profile.name !== "default" || args.store !== undefined;
 
@@ -25,7 +26,7 @@ async function one(query: string, since?: string, until?: string, quiet = false)
   const events: (V3Event & { t: number })[] = [];
   let posts = 0;
   let lastProgress = 0;
-  for await (const e of runV3({ query, since, until, sources })) {
+  for await (const e of runV3({ query, since, until, sources, ...profileRequest(profile), ...(args["budget-usd"] !== undefined && !args.batch ? { budgetUsd: Number(args["budget-usd"]) } : {}) })) {
     events.push({ ...e, t: Date.now() - t0 });
     const d = e.data as any;
     if (quiet) continue;
@@ -55,6 +56,7 @@ if (args.batch && profile.research) {
     budgetUsd: args["budget-usd"] !== undefined ? Number(args["budget-usd"]) : undefined,
     store: profile.store,
     sources: args.sources ? sources : ["reddit"],
+    request: profileRequest(profile),
     run: (req) => runV3(req),
     log: (l) => console.log(l),
   });

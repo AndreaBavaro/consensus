@@ -45,6 +45,18 @@ export interface RawPost {
   author: Author;
 }
 
+/** Research profile only: who the poster is, as the sorter reads it ("-" = cannot tell). */
+export interface PostTags {
+  /** S = own experience, L = local about their own country, H = hearsay. */
+  firsthand: "S" | "L" | "H" | "-";
+  origin: "CA" | "US" | "UK" | "EU" | "OT" | "-";
+  dest: "IT" | "IE" | "PT" | "ES" | "FR" | "OT" | "-";
+  /** P planning, A arriving, Y first year, E settled, R returned, X leaving Canada. */
+  phase: "P" | "A" | "Y" | "E" | "R" | "X" | "-";
+  /** Two-letter language code, or "-". */
+  lang: string;
+}
+
 /** A sorted post as streamed in `posts` events. Only posts with a stance or a lead intent are streamed. */
 export interface Post extends Omit<RawPost, "created_utc"> {
   created_at: string | null;
@@ -61,6 +73,8 @@ export interface Post extends Omit<RawPost, "created_utc"> {
    * descending; ties fall back to `rank`. Does not depend on the option, so it survives Other splits.
    */
   relevance?: number;
+  /** Research profile only (SearchRequest.tags). */
+  tags?: PostTags;
 }
 
 export interface PollOption {
@@ -79,6 +93,8 @@ export interface PollOption {
   /** Lead counts among this option's opinions. */
   intents: Record<Intent, number>;
   leads: number;
+  /** Research profile only: share (0..1) of this option's opinions dated within 24 months of the run. */
+  recent_share?: number;
 }
 
 export interface Poll {
@@ -102,6 +118,8 @@ export interface Poll {
    * reddit_posts = posts that reached the sorter; reddit_threads = threads opened.
    */
   scanned?: { total: number; reddit_threads: number; reddit_posts: number; x_fetched: number; x_kept: number };
+  /** Research profile only: the poll among first-hand posters from Canada or the US. */
+  subsets?: { first_hand_na: { total: number; options: { id: string; count: number; percent: number }[] } };
 }
 
 export interface Reason {
@@ -142,6 +160,8 @@ export interface SearchRequest {
   signal?: AbortSignal;
   /** Research runs: stop collecting and sorting once this much (USD) has been spent. Unset = no cap (today's behaviour). */
   budgetUsd?: number;
+  /** Research profile: the sorter writes poster tags instead of the sales-lead column. */
+  tags?: boolean;
 }
 
 export interface V3Event {
