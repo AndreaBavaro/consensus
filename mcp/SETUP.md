@@ -54,7 +54,20 @@ You should see a poll in about a minute. If a key is missing, the error names th
 
 Replace `/ABS/PATH/consensus` with the folder path from step 2. The `--env-file-if-exists` flag loads your keys when `.env` exists and is harmless when it doesn't.
 
-### Claude Code
+### Claude Code, prebuilt (starts faster)
+
+Build the server once (and again after pulling changes), then register the built file with plain `node`:
+
+```bash
+npm run build:mcp
+claude mcp add -s user consensus -- node --env-file-if-exists=/ABS/PATH/consensus/.env /ABS/PATH/consensus/dist/mcp/server.mjs
+```
+
+The built server lists its tools in well under 3 seconds because the pipeline loads only on the first search. A `consensus_search` can take 60 to 170 seconds (research runs fetch more threads), so raise your client's MCP tool timeout to at least 180 seconds; in Claude Code, start it with `MCP_TOOL_TIMEOUT=180000`.
+
+Each local search is saved links-only (links, ids, dates, scores, handles and labels, no post text) to `runs/mcp/<id>.json` (or `CONSENSUS_RUNS_DIR`), and `consensus_get` reads that file before asking useconsensus.io. `consensus_search` also takes optional `profile` (`newpostcode`), `subs`, `deny_subs`, `lang` and `budget_usd` inputs.
+
+### Claude Code, from source
 
 ```bash
 claude mcp add consensus -- npx -y tsx --env-file-if-exists=/ABS/PATH/consensus/.env /ABS/PATH/consensus/mcp/server.ts

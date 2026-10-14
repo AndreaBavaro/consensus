@@ -14,9 +14,25 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { parseSse } from "./sse.ts";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SITE, summarize, toMarkdown, type Summary } from "./format.ts";
-import { runV3 } from "../src/v3/run.ts";
+import { saveRun } from "../src/np/links.ts";
+import { loadRun } from "../src/np/export.ts";
+import { profileRequest, resolveProfile } from "../src/v3/profile.ts";
 import type { V3Event, V3Source } from "../src/v3/types.ts";
+
+/** Local searches are saved links-only here; consensus_get reads them before asking the site. */
+const runsDir = () => process.env.CONSENSUS_RUNS_DIR ?? fileURLToPath(new URL(import.meta.url.includes("/dist/mcp/") ? "../../runs/mcp/" : "../runs/mcp/", import.meta.url));
+
+async function localSaved(id: string): Promise<Summary | null> {
+  try {
+    return summarize(loadRun(JSON.parse(await readFile(join(runsDir(), `${id}.json`), "utf8"))).events as V3Event[]);
+  } catch {
+    return null;
+  }
+}
 
 /** Everything a fresh search needs; X is optional (sources=["reddit"]). Checked per call so the free tools always work. */
 const SEARCH_KEYS: Record<string, string[]> = {
@@ -80,6 +96,8 @@ server.registerTool(
     inputSchema: { id: z.string().regex(ID, "a Consensus search id (8–32 url-safe characters)").describe("Search id, e.g. ByAYXunnmt6BGCQR from https://useconsensus.io/search?id=ByAYXunnmt6BGCQR") },
   },
   async ({ id }) => {
+    const local = await localSaved(id);
+    if (local) return { content: [{ type: "text", text: `${toMarkdown(local)}\n\n(local research run, saved links-only in ${runsDir()})` }], structuredContent: local as unknown as Record<string, unknown> };
     const s = await fetchSaved(id);
     return { content: [{ type: "text", text: toMarkdown(s) }], structuredContent: s as unknown as Record<string, unknown> };
   },
@@ -108,7 +126,7 @@ server.registerTool(
     description:
       "Ask a new question and get a poll of what people on Reddit and X actually say: options with percentages, a one-line reason each, " +
       "and linked quotes. Use for 'X vs Y', 'is X worth it', 'best X for Y', 'what do people think about X'. Runs the full Consensus pipeline " +
-      "locally with the keys in .env (about 30-60 s and a few tens of cents per search, billed to those keys). Prefer consensus_get when the " +
+      "locally with the keys in .env (about 60-170 s and a few cents per search, billed to those keys). Prefer consensus_get when the " +
       "question already has a saved id.",
     inputSchema: {
       question: z.string().trim().min(3).max(300).describe("The question, as a person would ask it, e.g. 'Cursor vs Claude Code' or 'is a Costco membership worth it'"),
@@ -116,9 +134,19 @@ server.registerTool(
       until: z.string().regex(DATE).optional().describe("Only opinions up to this date, YYYY-MM-DD"),
       sources: z.array(z.enum(["reddit", "x"])).min(1).optional().describe("Default both; pass [\"reddit\"] without an X key"),
       quotes_per_option: z.number().int().min(0).max(10).optional().describe("Linked quotes per option, default 4"),
+      profile: z.enum(["default", "newpostcode"]).optional().describe("Run profile; newpostcode = Reddit only, poster tags, targeted subreddits, no UI extras (default: CONSENSUS_PROFILE or default)"),
+      subs: z.array(z.string().regex(/^\w{2,30}$/)).optional().describe("Subreddits always searched (names without r/)"),
+      deny_subs: z.array(z.string().regex(/^\w{2,30}$/)).optional().describe("Subreddits never fetched"),
+      lang: z.array(z.string().regex(/^[a-z]{2}$/)).optional().describe("Extra search languages, e.g. [\"it\",\"pt\"]"),
+      budget_usd: z.number().positive().max(5).optional().describe("Stop collecting and sorting once this much has been spent"),
     },
   },
-  async ({ question, since, until, sources = ["reddit", "x"], quotes_per_option }, extra) => {
+  async ({ question, since, until, sources: asked, quotes_per_option, profile: profileName, subs, deny_subs, lang, budget_usd }, extra) => {
+    const profile = resolveProfile(
+      { ...(profileName ? { profile: profileName } : {}), ...(subs ? { subs: subs.join(",") } : {}), ...(deny_subs ? { "deny-subs": deny_subs.join(",") } : {}), ...(lang ? { lang: lang.join(",") } : {}) },
+      process.env,
+    );
+    const sources: V3Source[] = asked ?? (profile.research ? ["reddit"] : ["reddit", "x"]);
     const missing = missingKeys(sources);
     if (missing.length) throw new Error(`consensus_search needs these environment variables (see .env.example): ${missing.join("; ")}`);
     if (since && until && since > until) throw new Error("since must be on or before until");
@@ -127,7 +155,9 @@ server.registerTool(
     const token = extra._meta?.progressToken;
     const events: V3Event[] = [];
     try {
-      for await (const e of runV3({ query: question, since, until, sources: [...new Set(sources)], signal: extra.signal })) {
+      // Loaded on first search so the server starts (and lists tools) without loading the pipeline.
+      const { runV3 } = await import("../src/v3/run.ts");
+      for await (const e of runV3({ query: question, since, until, sources: [...new Set(sources)], signal: extra.signal, ...profileRequest(profile), ...(budget_usd ? { budgetUsd: budget_usd } : {}) })) {
         events.push(e);
         if (e.event === "progress" && token !== undefined) {
           const d = e.data as { stage: string; reddit: { threads: number; posts: number }; x: { posts: number }; sorted: number; pool: number; elapsed_ms: number };
@@ -141,6 +171,8 @@ server.registerTool(
       inflight = null;
     }
     const s = summarize(events, { quotesPerOption: quotes_per_option });
+    // Every local search is kept links-only (no post text) so consensus_get can replay it.
+    if (s.id) await saveRun(join(runsDir(), `${s.id}.json`), { query: question, since, until, events }, "links").catch(() => {});
     const note = s.id ? `\n\nSaved id ${s.id} (the link above resolves once this question has also been run on useconsensus.io).` : "";
     return { content: [{ type: "text", text: toMarkdown(s) + note }], structuredContent: s as unknown as Record<string, unknown>, isError: !!s.error && !s.options.length };
   },

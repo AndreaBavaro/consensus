@@ -60,6 +60,8 @@ export function summarize(events: V3Event[], opts: { quotesPerOption?: number } 
   let error: string | null = null;
   const reasons = new Map<string, Reason>();
   const posts = new Map<string, Post>();
+  // Links-only research runs keep no post text; their quote paraphrases stand in for it.
+  const paraphrases = new Map<string, string>();
 
   for (const e of events) {
     const d = e.data as any;
@@ -83,6 +85,9 @@ export function summarize(events: V3Event[], opts: { quotesPerOption?: number } 
       case "error":
         error = d?.message ?? String(d);
         break;
+      case "quotes":
+        for (const r of (d?.rows ?? []) as { post_id: string; paraphrase: string }[]) paraphrases.set(r.post_id, r.paraphrase);
+        break;
     }
   }
 
@@ -100,7 +105,7 @@ export function summarize(events: V3Event[], opts: { quotesPerOption?: number } 
         by_source: o.by_source,
         why: reasons.get(o.id)?.summary ? fixMojibake(reasons.get(o.id)!.summary) : null,
         quotes: own.slice(0, quotesPerOption).map((p) => ({
-          text: fixMojibake(p.text).replace(/\s+/g, " ").trim().slice(0, 400),
+          text: typeof p.text === "string" ? fixMojibake(p.text).replace(/\s+/g, " ").trim().slice(0, 400) : (paraphrases.get(p.id) ?? "(text not stored; open the link)"),
           author: p.source === "reddit" ? `u/${p.author.handle}` : `@${p.author.handle}`,
           source: p.source,
           community: p.community,
