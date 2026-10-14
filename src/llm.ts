@@ -24,7 +24,14 @@ function body(prompt: string, opts: LlmOptions, extra: Record<string, unknown>) 
     temperature: opts.temperature ?? 0,
     max_tokens: opts.maxTokens ?? 8000,
     // Jev otherwise routes long prompts to reasoning models that print their thinking instead of the answer.
-    ...((opts.noReasoning ?? (model.startsWith("deepseek/") || model.includes("jev-router"))) ? { reasoning: { enabled: false } } : {}),
+    ...((opts.noReasoning ?? (model.startsWith("deepseek/") || model.includes("jev-router")))
+      ? {
+          reasoning: { enabled: false },
+          // 2026-10-14: Straitly started ignoring reasoning.enabled=false (DeepSeek reasoned anyway, used up max_tokens and
+          // returned empty content); the OpenAI-style reasoning_effort is honoured.
+          ...(env.llmGateway.name === "straitly" ? { reasoning_effort: "none" } : {}),
+        }
+      : {}),
     // OpenRouter-only fields: provider routing and per-call cost in `usage`.
     ...(env.llmGateway.name === "openrouter"
       ? {
