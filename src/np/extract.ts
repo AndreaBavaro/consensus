@@ -9,9 +9,9 @@ import { CODEBOOK } from "./codebook.ts";
 import { checkParaphrase } from "./quotes.ts";
 import type { Post } from "../v3/types.ts";
 
-const WHAT = ["wrong_order", "missed_deadline", "wrong_document", "no_appointment", "long_wait", "no_response", "refused_by_office", "inconsistent_officials", "lost_status_while_waiting", "status_reversed", "card_not_delivered", "cannot_travel", "portal_error", "unexpected_cost", "paid_help_failed", "account_frozen", "coverage_gap", "scam", "misread_rule", "other"] as const;
+const WHAT = ["wrong_order", "missed_deadline", "wrong_document", "no_appointment", "appointment_cancelled", "long_wait", "no_response", "refused_by_office", "inconsistent_officials", "lost_status_while_waiting", "validity_gap", "status_reversed", "card_not_delivered", "cannot_travel", "portal_error", "unexpected_cost", "paid_help_failed", "account_frozen", "coverage_gap", "scam", "misread_rule", "other"] as const;
 const OUTCOME = ["delay", "money_lost", "refused", "had_to_redo", "stuck", "resolved", "-"] as const;
-const FIX = ["lawyer", "agency_fixer", "went_in_person", "other_office", "called_or_emailed_repeatedly", "booked_before_flying", "used_receipt", "escalated_complaint", "ombudsman", "appeal", "court_action", "tacit_approval", "resubmitted", "changed_route", "waited", "local_help", "online_portal", "paid_private", "other"] as const;
+const FIX = ["lawyer", "agency_fixer", "went_in_person", "other_office", "called_or_emailed_repeatedly", "booked_before_flying", "used_receipt", "escalated_complaint", "requested_written_proof", "ombudsman", "appeal", "court_action", "tacit_approval", "resubmitted", "changed_route", "waited", "local_help", "online_portal", "paid_private", "other"] as const;
 const FOUND_OUT = ["before", "at_office", "after", "-"] as const;
 const TRIGGERS = ["cost_of_living_ca", "housing_ca", "winters", "politics", "career", "family_ties", "heritage_citizenship", "lifestyle", "healthcare", "retirement", "remote_work", "adventure", "safety", "kids_education"] as const;
 const CRITERIA = ["cost", "climate", "language", "healthcare", "taxes", "visa_ease", "family", "safety", "lifestyle", "jobs", "english", "community"] as const;

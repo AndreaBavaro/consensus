@@ -95,3 +95,12 @@ test("v2: advice to others is dropped, fixes count only when they worked, steps 
   assert.deepEqual(r.incidents[1]!.tried, ["called_or_emailed_repeatedly", "escalated_complaint"]);
   assert.deepEqual(r.steps, ["pt:aima", "pt:nif"]);
 });
+
+test("codes added after the second audit are accepted", () => {
+  const r = validateRecord({ ...raw, incidents: [{ ...raw.incidents[0], step: "pt:permanent-residence", what: "validity_gap", tried: ["requested_written_proof"] }] }, post as any)!;
+  assert.equal(r.incidents[0]!.step, "pt:permanent-residence");
+  assert.equal(r.incidents[0]!.what, "validity_gap");
+  assert.deepEqual(r.incidents[0]!.tried, ["requested_written_proof"]);
+  for (const c of ["pt:visa-extension", "pt:chave-movel-digital"]) assert.ok(c in CODEBOOK);
+  assert.equal(validateRecord({ ...raw, incidents: [{ ...raw.incidents[0], what: "appointment_cancelled" }] }, post as any)!.incidents[0]!.what, "appointment_cancelled");
+});

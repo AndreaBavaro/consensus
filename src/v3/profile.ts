@@ -25,7 +25,7 @@ export interface Profile {
   lang: string[];
   /** Paraphrased quote-bank rows written per option at the end of a run. */
   quotesPerOption: number;
-  /** Coded extraction records from first-hand posts (pilot; off until audited). */
+  /** Coded extraction records from first-hand posts (on under the research profile). */
   extract: boolean;
 }
 
@@ -43,7 +43,8 @@ export const PROFILES: Record<ProfileName, Profile> = {
     denySubs: ["Italian", "ItalyTravel", "irishtourism", "travel"],
     lang: [],
     quotesPerOption: 5,
-    extract: false,
+    // Audited 2026-10-14 (v2): fixes 100%, steps 85%, problem type 84%; links-only runs cannot be re-extracted later.
+    extract: true,
   },
 };
 

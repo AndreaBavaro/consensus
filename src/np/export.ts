@@ -125,7 +125,7 @@ const extractRecordsOf = (r: LoadedRun): ExtractRecord[] => r.events.filter((e) 
 
 const WHAT_LABEL: Record<string, string> = {
   wrong_order: "steps done in the wrong order", missed_deadline: "missed deadlines", wrong_document: "wrong or missing documents", no_appointment: "no appointments available",
-  long_wait: "long waits", no_response: "no response from the office", status_reversed: "a decision reversed", card_not_delivered: "the card never arriving", cannot_travel: "being unable to travel while waiting",
+  long_wait: "long waits", no_response: "no response from the office", appointment_cancelled: "appointments cancelled", validity_gap: "a gap between permits", status_reversed: "a decision reversed", card_not_delivered: "the card never arriving", cannot_travel: "being unable to travel while waiting",
   portal_error: "online portal errors", paid_help_failed: "paid help that did not deliver", refused_by_office: "refusals at the office", inconsistent_officials: "officials giving different answers", lost_status_while_waiting: "status lapsing while waiting",
   unexpected_cost: "unexpected costs", account_frozen: "frozen or closed accounts", coverage_gap: "gaps in health coverage", scam: "scams", misread_rule: "misreading the rule", other: "other problems",
 };

@@ -38,3 +38,9 @@ test("sidecar: coded records only, timeline ids matched, no paraphrases", () => 
   assert.deepEqual(s.incidents[0]!.timeline_steps, ["pt-d7-05-aima"]);
   assert.ok(!JSON.stringify(s).includes("gist"));
 });
+
+test("sidecar leaves out the who facets (internal only until they are accurate)", () => {
+  const s = toSidecar("pt-aima", aggregate([rec(1, "a")] as any, { now: NOW }), { runDate: "2026-10-14" });
+  assert.equal("facets" in s, false);
+  assert.ok("facets" in aggregate([rec(1, "a")] as any, { now: NOW }));
+});

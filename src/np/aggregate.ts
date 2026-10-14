@@ -128,7 +128,7 @@ export function toSidecar(batch: string, a: Aggregate, o: { timelineIds?: string
     paid_for: a.paid_for,
     triggers: a.triggers,
     choices: a.choices,
-    facets: a.facets,
+    // `facets` (household, route, income, consulate) stay internal: the who codes audited at 64% precision.
     saturation: a.saturation,
   };
 }
