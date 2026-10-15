@@ -104,3 +104,10 @@ test("codes added after the second audit are accepted", () => {
   for (const c of ["pt:visa-extension", "pt:chave-movel-digital"]) assert.ok(c in CODEBOOK);
   assert.equal(validateRecord({ ...raw, incidents: [{ ...raw.incidents[0], what: "appointment_cancelled" }] }, post as any)!.incidents[0]!.what, "appointment_cancelled");
 });
+
+test("codebook covers non-paperwork steps (housing, healthcare, jobs, school, driving) in every destination", () => {
+  for (const cc of ["it", "pt", "ie", "es", "fr"]) {
+    for (const step of ["job-search", "school-enrolment", "driving-licence"]) assert.ok(`${cc}:${step}` in CODEBOOK, `${cc}:${step}`);
+  }
+  for (const c of ["es:lease", "es:healthcare", "fr:caf", "ie:housing", "pt:lease", "it:housing-paperwork", "fr:social-security"]) assert.ok(c in CODEBOOK, c);
+});

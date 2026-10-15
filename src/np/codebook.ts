@@ -1,5 +1,5 @@
 /**
- * Step codebook for extraction (v1, seed: needs Andrea's approval). Codes are "<country>:<step>", independent of the
+ * Step codebook for extraction (v2; Andrea approved extending it to non-paperwork steps on 2026-10-14). Codes are "<country>:<step>", independent of the
  * route, so one code covers e.g. the codice fiscale step on every Italian route. `rule` is the New Postcode rule slug
  * (newpostcode/src/db/seed-data.ts); timeline step ids (newpostcode/data/timeline/<cc>.json) end in "-<step>".
  */
@@ -25,6 +25,8 @@ export const CODEBOOK: Record<string, StepCode> = {
   "it:partita-iva": { label: "Open a partita IVA and INPS registration" },
   "it:citizenship-descent": { label: "Citizenship by descent (jure sanguinis)" },
   "it:driving-licence": { label: "Convert or obtain a driving licence" },
+  "it:job-search": { label: "Look for work with an Italian employer" },
+  "it:school-enrolment": { label: "Enrol children in school" },
   // Portugal
   "pt:nif": { label: "Get the NIF", rule: "pt-nif" },
   "pt:bank-account": { label: "Open a Portuguese bank account" },
@@ -43,6 +45,9 @@ export const CODEBOOK: Record<string, StepCode> = {
   "pt:sns": { label: "Get the SNS number / register at a health centre", rule: "pt-sns-number" },
   "pt:tax-residency": { label: "Become Portuguese tax resident", rule: "pt-tax-residency-183" },
   "pt:ifici": { label: "IFICI / NHR tax regime", rule: "pt-ifici-20-percent" },
+  "pt:job-search": { label: "Look for work with a Portuguese employer" },
+  "pt:school-enrolment": { label: "Enrol children in school" },
+  "pt:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Ireland
   "ie:work-permit": { label: "Employment permit or Stamp 1G" },
   "ie:housing": { label: "Find housing / a lease" },
@@ -51,6 +56,8 @@ export const CODEBOOK: Record<string, StepCode> = {
   "ie:bank-account": { label: "Open an Irish bank account" },
   "ie:gp": { label: "Register with a GP" },
   "ie:school-enrolment": { label: "Enrol children in school", rule: "ie-school-enrolment" },
+  "ie:job-search": { label: "Look for work with an Irish employer" },
+  "ie:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Spain
   "es:visa-application": { label: "Visa application at the consulate or BLS" },
   "es:nie": { label: "Get the NIE", rule: "es-nie" },
@@ -58,6 +65,11 @@ export const CODEBOOK: Record<string, StepCode> = {
   "es:tie": { label: "TIE card appointment and fingerprints", rule: "es-tie-30-days" },
   "es:bank-account": { label: "Open a Spanish bank account" },
   "es:beckham": { label: "Beckham tax regime", rule: "es-beckham-regime" },
+  "es:lease": { label: "Find and sign a lease" },
+  "es:healthcare": { label: "Register for public healthcare (tarjeta sanitaria) or private cover" },
+  "es:job-search": { label: "Look for work with a Spanish employer" },
+  "es:school-enrolment": { label: "Enrol children in school" },
+  "es:driving-licence": { label: "Exchange or obtain a driving licence" },
   // France
   "fr:visa-application": { label: "Long-stay visa application (France-Visas / VFS)" },
   "fr:vls-ts-validation": { label: "Validate the VLS-TS online", rule: "fr-vls-ts-validation" },
@@ -65,6 +77,10 @@ export const CODEBOOK: Record<string, StepCode> = {
   "fr:social-security": { label: "Social security number / PUMA / carte Vitale", rule: "fr-social-security-number" },
   "fr:bank-account": { label: "Open a French bank account" },
   "fr:housing": { label: "Find housing / a dossier for a lease" },
+  "fr:caf": { label: "CAF housing benefit" },
+  "fr:job-search": { label: "Look for work with a French employer" },
+  "fr:school-enrolment": { label: "Enrol children in school" },
+  "fr:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Canada exit
   "ca:nr73": { label: "NR73 / residency determination", rule: "nr73-residency-opinion" },
   "ca:departure-tax": { label: "Departure tax (deemed disposition)", rule: "departure-tax-deemed-disposition" },
