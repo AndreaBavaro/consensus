@@ -54,6 +54,9 @@ export interface ExtractRecord {
   country: string;
   phase: string;
   firsthand: string;
+  /** Raw poster tags, so a block can keep only moves to its destinations (validation 2026-10-14: US moves in Canada-exit evidence). */
+  origin?: string;
+  dest?: string;
   who: { household: Of<typeof HOUSEHOLD>; partner_non_eu: boolean | null; passports: Of<typeof PASSPORTS>[]; income: Of<typeof INCOME>; route: Of<typeof ROUTE>; consulate: Of<typeof CONSULATE>; region: string | null };
   incidents: Incident[];
   /** Step codes in the order the poster says they did them. */
@@ -130,6 +133,8 @@ export function validateRecord(raw: any, post: TextPost): ExtractRecord | null {
     country: tags?.dest && tags.dest !== "-" && tags.dest !== "OT" ? tags.dest : (stepCountry ?? "-"),
     phase: tags?.phase ?? "-",
     firsthand: tags?.firsthand ?? "-",
+    origin: tags?.origin ?? "-",
+    dest: tags?.dest ?? "-",
     who: {
       household: pick(HOUSEHOLD, who.household, "-"),
       partner_non_eu: typeof who.partner_non_eu === "boolean" ? who.partner_non_eu : null,

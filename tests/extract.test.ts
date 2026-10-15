@@ -111,3 +111,9 @@ test("codebook covers non-paperwork steps (housing, healthcare, jobs, school, dr
   }
   for (const c of ["es:lease", "es:healthcare", "fr:caf", "ie:housing", "pt:lease", "it:housing-paperwork", "fr:social-security"]) assert.ok(c in CODEBOOK, c);
 });
+
+test("records keep the poster's origin and raw destination tags", () => {
+  const r = validateRecord(raw, { ...post, tags: { ...post.tags, origin: "CA", dest: "OT" } } as any)!;
+  assert.equal(r.origin, "CA");
+  assert.equal(r.dest, "OT");
+});

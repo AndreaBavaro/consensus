@@ -14,19 +14,24 @@ const bump = (m: Record<string, number>, k: string | null | undefined) => {
   if (k) m[k] = (m[k] ?? 0) + 1;
 };
 
-export function aggregate(records: ExtractRecord[], o: { now?: number } = {}) {
+export function aggregate(all: ExtractRecord[], o: { now?: number; destinations?: string[] } = {}) {
   const now = o.now ?? Date.now();
+  // A block about given destinations drops posts tagged as moves elsewhere; unknown destinations ("-") stay.
+  const records = o.destinations ? all.filter((r) => !r.dest || r.dest === "-" || o.destinations!.includes(r.dest)) : all;
+  const excluded_other_destination = all.length - records.length;
   const recent = (r: ExtractRecord) => !!r.created_at && now - Date.parse(r.created_at) <= RECENT_MS;
 
-  const inc = new Map<string, { country: string; step: string; what: string; threads: Set<string>; posts: number; recent_posts: number; fixes: Record<string, number>; tried: Record<string, number>; links: string[] }>();
+  const inc = new Map<string, { country: string; step: string; what: string; threads: Set<string>; authors: Set<string>; posts: number; recent_posts: number; rule_dependent_posts: number; fixes: Record<string, number>; tried: Record<string, number>; links: string[] }>();
   for (const r of records)
     for (const i of r.incidents) {
       const country = i.step.includes(":") ? i.step.split(":")[0]!.toUpperCase() : r.country;
       const k = `${country}|${i.step}|${i.what}`;
-      const e = inc.get(k) ?? inc.set(k, { country, step: i.step, what: i.what, threads: new Set(), posts: 0, recent_posts: 0, fixes: {}, tried: {}, links: [] }).get(k)!;
+      const e = inc.get(k) ?? inc.set(k, { country, step: i.step, what: i.what, threads: new Set(), authors: new Set(), posts: 0, recent_posts: 0, rule_dependent_posts: 0, fixes: {}, tried: {}, links: [] }).get(k)!;
       e.threads.add(r.thread_url ?? r.url);
+      if (r.handle && r.handle !== "[deleted]") e.authors.add(r.handle);
       e.posts++;
       if (recent(r)) e.recent_posts++;
+      if (r.rule_dependent) e.rule_dependent_posts++;
       bump(e.fixes, i.fix);
       for (const t of i.tried ?? []) bump(e.tried, t);
       if (e.links.length < LINKS && !e.links.includes(r.url)) e.links.push(r.url);
@@ -39,15 +44,18 @@ export function aggregate(records: ExtractRecord[], o: { now?: number } = {}) {
       rule: CODEBOOK[e.step]?.rule ?? null,
       what: e.what,
       threads: e.threads.size,
+      /** Distinct posters: one person's several comments count once (validation 2026-10-14). */
+      authors: e.authors.size,
       posts: e.posts,
       recent_posts: e.recent_posts,
+      rule_dependent_posts: e.rule_dependent_posts,
       /** What finally worked, per the posters. */
       fixes: Object.entries(e.fixes).map(([fix, posts]) => ({ fix, posts })).sort((a, b) => b.posts - a.posts),
       /** Everything people tried, worked or not. */
       tried: Object.entries(e.tried).map(([fix, posts]) => ({ fix, posts })).sort((a, b) => b.posts - a.posts),
       links: e.links,
     }))
-    .sort((a, b) => b.threads - a.threads || b.posts - a.posts);
+    .sort((a, b) => b.authors - a.authors || b.threads - a.threads || b.posts - a.posts);
 
   // Usual order per country: mean relative position of each step among posts that state an order of 2+ steps.
   const pos = new Map<string, Map<string, number[]>>();
@@ -103,6 +111,7 @@ export function aggregate(records: ExtractRecord[], o: { now?: number } = {}) {
 
   return {
     first_hand_posts: records.length,
+    excluded_other_destination,
     incidents,
     order,
     paid_for: [...paid.values()].sort((a, b) => b.posts - a.posts),

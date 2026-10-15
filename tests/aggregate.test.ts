@@ -18,7 +18,7 @@ test("aggregate: incidents ranked by distinct threads with fixes, recency and li
   const a = aggregate(records as any, { now: NOW });
   assert.deepEqual(a.incidents[0], {
     country: "PT", step: "pt:aima", step_label: "AIMA appointment and residence card (unspecified)", rule: null, what: "long_wait",
-    threads: 3, posts: 4, recent_posts: 3, fixes: [{ fix: "lawyer", posts: 2 }], tried: [{ fix: "called_or_emailed_repeatedly", posts: 4 }], links: [records[0]!.url, records[1]!.url, records[2]!.url, records[3]!.url],
+    threads: 3, authors: 4, posts: 4, recent_posts: 3, rule_dependent_posts: 0, fixes: [{ fix: "lawyer", posts: 2 }], tried: [{ fix: "called_or_emailed_repeatedly", posts: 4 }], links: [records[0]!.url, records[1]!.url, records[2]!.url, records[3]!.url],
   });
   assert.equal(a.incidents[1]!.step, "pt:nif");
   assert.equal(a.incidents[1]!.rule, "pt-nif");
@@ -51,4 +51,17 @@ test("sidecar incidents carry app_steps (New Postcode timeline/checklist keys) n
   const broker = s.incidents.find((i) => i.step === "ca:broker")!;
   assert.deepEqual(broker.app_steps, ["broker-non-resident", "bank-iban"]);
   assert.deepEqual(s.incidents.find((i) => i.step === "pt:aima")!.app_steps, []);
+});
+
+test("validation fixes: distinct authors, destination filter, rule-dependent counts", () => {
+  const same = (i: number, over: any = {}) => rec(i, `t${i}`, { handle: "sameuser", ...over });
+  const records = [same(1), same(2), same(3), rec(4, "t4", { dest: "OT", origin: "CA" }), rec(5, "t5", { rule_dependent: true, dest: "PT" })];
+  const a = aggregate(records as any, { now: NOW });
+  const aima = a.incidents.find((i) => i.step === "pt:aima")!;
+  assert.equal(aima.authors, 3, "one author's three posts count once");
+  assert.equal(aima.rule_dependent_posts, 1);
+  // A Europe-only block drops posts about moving elsewhere (dest OT); unknown destinations stay.
+  const eu = aggregate(records as any, { now: NOW, destinations: ["IT", "IE", "PT", "ES", "FR"] });
+  assert.equal(eu.incidents.find((i) => i.step === "pt:aima")!.posts, 4);
+  assert.equal(eu.excluded_other_destination, 1);
 });
