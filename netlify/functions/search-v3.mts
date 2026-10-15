@@ -2,6 +2,7 @@ import type { Config, Context } from "@netlify/functions";
 import { env } from "../../src/lib/env.ts";
 import { runV3, searchId } from "../../src/v3/run.ts";
 import { anonId, clientIp, sessionUser } from "../../src/v3/auth.ts";
+import { isCacheable } from "../../src/v3/cacheable.ts";
 import { acquireInflight, addHistory, addSpend, allowRequest, anonFreeSearch, anonIpCount, countUserSearch, readCache, readSaved, claimFreeSearch, releaseInflight, spentToday, writeCache } from "../../src/v3/store.ts";
 import type { V3Event, V3Source } from "../../src/v3/types.ts";
 import { isDevRuntime } from "../../src/lib/runtime.ts";
@@ -148,7 +149,7 @@ export default async (req: Request, context: Context) => {
         if (e.event === "done") {
           const d = e.data as { cost: { total_usd: number }; status: string };
           cost = d.cost.total_usd;
-          ok = d.status !== "empty";
+          ok = isCacheable(d.status);
         }
       }
       // Live progress ticks are not worth replaying; everything else is.

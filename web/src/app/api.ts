@@ -39,7 +39,9 @@ export interface AuthorProfile {
 }
 export interface Done {
   id: string;
-  status: 'ok' | 'thin' | 'empty';
+  status: 'ok' | 'thin' | 'empty' | 'error';
+  /** Set when status is error: the LLM or search provider failed (the UI still shows the empty state). */
+  error_reason?: 'llm_unavailable' | 'search_unavailable';
   reason?: 'off_topic' | string;
   total_ms: number;
   timing?: Record<string, number>;
