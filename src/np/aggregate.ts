@@ -123,7 +123,7 @@ export function toSidecar(batch: string, a: Aggregate, o: { timelineIds?: string
     run_date: o.runDate,
     source: "reddit (Consensus research profile); themes only, never numbers or facts on the site",
     first_hand_posts: a.first_hand_posts,
-    incidents: a.incidents.map(({ step_label: _l, ...i }) => ({ ...i, timeline_steps: timelineStepFor(i.step, o.timelineIds ?? []) })),
+    incidents: a.incidents.map(({ step_label: _l, ...i }) => ({ ...i, timeline_steps: timelineStepFor(i.step, o.timelineIds ?? []), app_steps: CODEBOOK[i.step]?.app ?? [] })),
     order: a.order,
     paid_for: a.paid_for,
     triggers: a.triggers,

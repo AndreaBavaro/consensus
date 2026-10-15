@@ -44,3 +44,11 @@ test("sidecar leaves out the who facets (internal only until they are accurate)"
   assert.equal("facets" in s, false);
   assert.ok("facets" in aggregate([rec(1, "a")] as any, { now: NOW }));
 });
+
+test("sidecar incidents carry app_steps (New Postcode timeline/checklist keys) next to the rule slug", () => {
+  const r = rec(1, "a", { incidents: [{ step: "ca:broker", what: "account_frozen", outcome: "stuck", fix: null, tried: [], found_out: "after", gist: null }] });
+  const s = toSidecar("x", aggregate([r, rec(2, "b")] as any, { now: NOW }), { runDate: "2026-10-14" });
+  const broker = s.incidents.find((i) => i.step === "ca:broker")!;
+  assert.deepEqual(broker.app_steps, ["broker-non-resident", "bank-iban"]);
+  assert.deepEqual(s.incidents.find((i) => i.step === "pt:aima")!.app_steps, []);
+});

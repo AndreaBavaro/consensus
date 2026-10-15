@@ -6,6 +6,8 @@
 export interface StepCode {
   label: string;
   rule?: string;
+  /** New Postcode app keys: step keys in src/content/timelines.ts and checklist ids in src/content/checklist.ts. */
+  app?: string[];
 }
 
 export const CODEBOOK: Record<string, StepCode> = {
@@ -15,10 +17,10 @@ export const CODEBOOK: Record<string, StepCode> = {
   "it:fingerprints": { label: "Consulate fingerprints / biometrics" },
   "it:entry-and-permesso": { label: "Apply for the permesso di soggiorno after arrival" },
   "it:permesso-renewal": { label: "Renew the permesso di soggiorno" },
-  "it:codice-fiscale": { label: "Get the codice fiscale", rule: "it-codice-fiscale" },
+  "it:codice-fiscale": { label: "Get the codice fiscale", rule: "it-codice-fiscale", app: ["cf", "it-codice-fiscale"] },
   "it:housing-paperwork": { label: "Lease registration and housing paperwork" },
-  "it:residenza": { label: "Register residence at the anagrafe", rule: "it-anagrafe-registration" },
-  "it:aire": { label: "AIRE registration or cancellation", rule: "it-aire-90-days" },
+  "it:residenza": { label: "Register residence at the anagrafe", rule: "it-anagrafe-registration", app: ["anagrafe"] },
+  "it:aire": { label: "AIRE registration or cancellation", rule: "it-aire-90-days", app: ["aire", "it-aire"] },
   "it:ssn": { label: "Enrol in the SSN and get the tessera sanitaria" },
   "it:bank-account": { label: "Open an Italian bank account" },
   "it:cie": { label: "Get the carta d'identità elettronica" },
@@ -28,7 +30,7 @@ export const CODEBOOK: Record<string, StepCode> = {
   "it:job-search": { label: "Look for work with an Italian employer" },
   "it:school-enrolment": { label: "Enrol children in school" },
   // Portugal
-  "pt:nif": { label: "Get the NIF", rule: "pt-nif" },
+  "pt:nif": { label: "Get the NIF", rule: "pt-nif", app: ["nif", "pt-nif"] },
   "pt:bank-account": { label: "Open a Portuguese bank account" },
   "pt:lease": { label: "Find and sign a lease" },
   "pt:visa-application": { label: "D7/D8 visa application at the consulate or VFS" },
@@ -42,20 +44,20 @@ export const CODEBOOK: Record<string, StepCode> = {
   "pt:chave-movel-digital": { label: "Chave Móvel Digital (government login)" },
   "pt:niss": { label: "Get the NISS (social security number)" },
   "pt:junta-registration": { label: "Junta de freguesia registration / residence certificate" },
-  "pt:sns": { label: "Get the SNS number / register at a health centre", rule: "pt-sns-number" },
-  "pt:tax-residency": { label: "Become Portuguese tax resident", rule: "pt-tax-residency-183" },
-  "pt:ifici": { label: "IFICI / NHR tax regime", rule: "pt-ifici-20-percent" },
+  "pt:sns": { label: "Get the SNS number / register at a health centre", rule: "pt-sns-number", app: ["sns"] },
+  "pt:tax-residency": { label: "Become Portuguese tax resident", rule: "pt-tax-residency-183", app: ["tax-res-pt"] },
+  "pt:ifici": { label: "IFICI / NHR tax regime", rule: "pt-ifici-20-percent", app: ["ifici"] },
   "pt:job-search": { label: "Look for work with a Portuguese employer" },
   "pt:school-enrolment": { label: "Enrol children in school" },
   "pt:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Ireland
   "ie:work-permit": { label: "Employment permit or Stamp 1G" },
   "ie:housing": { label: "Find housing / a lease" },
-  "ie:irp": { label: "IRP registration appointment", rule: "ie-irp-registration" },
-  "ie:pps": { label: "Get the PPS number", rule: "ie-pps-number" },
+  "ie:irp": { label: "IRP registration appointment", rule: "ie-irp-registration", app: ["irp"] },
+  "ie:pps": { label: "Get the PPS number", rule: "ie-pps-number", app: ["pps", "ie-pps"] },
   "ie:bank-account": { label: "Open an Irish bank account" },
   "ie:gp": { label: "Register with a GP" },
-  "ie:school-enrolment": { label: "Enrol children in school", rule: "ie-school-enrolment" },
+  "ie:school-enrolment": { label: "Enrol children in school", rule: "ie-school-enrolment", app: ["school-ie"] },
   "ie:job-search": { label: "Look for work with an Irish employer" },
   "ie:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Spain
@@ -82,15 +84,15 @@ export const CODEBOOK: Record<string, StepCode> = {
   "fr:school-enrolment": { label: "Enrol children in school" },
   "fr:driving-licence": { label: "Exchange or obtain a driving licence" },
   // Canada exit
-  "ca:nr73": { label: "NR73 / residency determination", rule: "nr73-residency-opinion" },
-  "ca:departure-tax": { label: "Departure tax (deemed disposition)", rule: "departure-tax-deemed-disposition" },
-  "ca:final-return": { label: "Final tax return for the year of departure", rule: "final-return-year-of-departure" },
-  "ca:tfsa": { label: "TFSA after leaving", rule: "tfsa-non-resident-penalty" },
-  "ca:rrsp": { label: "RRSP withdrawals as a non-resident", rule: "rrsp-non-resident-withholding" },
-  "ca:broker": { label: "Canadian bank or broker account as a non-resident" },
-  "ca:ohip": { label: "OHIP coverage when leaving Ontario", rule: "ohip-153-days" },
-  "ca:provincial-health": { label: "Other provincial health coverage (RAMQ, MSP, AHCIP)" },
-  "ca:cpp-oas": { label: "CPP and OAS from abroad", rule: "cpp-paid-anywhere" },
+  "ca:nr73": { label: "NR73 / residency determination", rule: "nr73-residency-opinion", app: ["nr73"] },
+  "ca:departure-tax": { label: "Departure tax (deemed disposition)", rule: "departure-tax-deemed-disposition", app: ["departure-tax-inventory", "fmv-record", "t1161"] },
+  "ca:final-return": { label: "Final tax return for the year of departure", rule: "final-return-year-of-departure", app: ["final-return"] },
+  "ca:tfsa": { label: "TFSA after leaving", rule: "tfsa-non-resident-penalty", app: ["tfsa-stop"] },
+  "ca:rrsp": { label: "RRSP withdrawals as a non-resident", rule: "rrsp-non-resident-withholding", app: ["rrsp-keep"] },
+  "ca:broker": { label: "Canadian bank or broker account as a non-resident", app: ["broker-non-resident", "bank-iban"] },
+  "ca:ohip": { label: "OHIP coverage when leaving Ontario", rule: "ohip-153-days", app: ["ohip-153-days", "ohip-serviceontario"] },
+  "ca:provincial-health": { label: "Other provincial health coverage (RAMQ, MSP, AHCIP)", app: ["ramq-form", "bc-msp-notify", "ahcip-cancel"] },
+  "ca:cpp-oas": { label: "CPP and OAS from abroad", rule: "cpp-paid-anywhere", app: ["cpp-oas-nr-tax", "oas-20-years"] },
   // Anything else
   other: { label: "A step not in this codebook" },
 };
