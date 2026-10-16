@@ -126,6 +126,12 @@ export async function fetchPostListing(postId: string): Promise<unknown> {
 
 /** Same hedged, retried fetch for any oauth.reddit.com path (e.g. /search). */
 export async function fetchRedditPath(path: string): Promise<unknown> {
+  const r = await fetchRedditPathStatus(path);
+  return r.status === "ok" ? r.body : null;
+}
+
+/** As fetchRedditPath, but keeps a 404 ("not_found") apart from a fetch that failed on every attempt ("failed"). */
+export async function fetchRedditPathStatus(path: string): Promise<{ status: "ok"; body: unknown } | { status: "not_found" | "failed" }> {
   const controller = new AbortController();
   let started = 0;
   let failed = 0;
@@ -159,6 +165,9 @@ export async function fetchRedditPath(path: string): Promise<unknown> {
   });
 
   controller.abort();
-  if (result === null) log.warn(`${path} failed after ${started} attempts`, { error: String(lastError) });
-  return result === NOT_FOUND ? null : result;
+  if (result === null) {
+    log.warn(`${path} failed after ${started} attempts`, { error: String(lastError) });
+    return { status: "failed" };
+  }
+  return result === NOT_FOUND ? { status: "not_found" } : { status: "ok", body: result };
 }
