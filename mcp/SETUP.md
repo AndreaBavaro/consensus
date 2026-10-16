@@ -11,6 +11,7 @@ Three tools appear in your AI tool:
 | `consensus_featured` | Lists the polls on the useconsensus.io home page | No | Free |
 | `consensus_get` | Returns a saved poll by id (the `id=` in a useconsensus.io link) | No | Free |
 | `consensus_search` | Asks a new question and builds the poll on your machine | Yes, see step 3 | Roughly 3 to 5 cents and 45 to 60 seconds per search, billed to your keys |
+| `consensus_reread` | Re-reads Reddit posts or comments by permalink for validation: status (live, deleted, removed, not found, fetch failed), date, score, and the longest word run a given line shares with the post | Oxylabs keys only | No LLM or Serper call; a few KB of proxy traffic per post |
 
 You can stop after step 2 and use the two free tools.
 

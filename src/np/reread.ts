@@ -234,3 +234,38 @@ export function indexById(records: RereadJson[]): Record<string, RereadJson> {
   }
   return idx;
 }
+
+/** The printed block for one record (CLI stdout and the MCP tool's text): status, metadata, the line, parent, post text. */
+export function formatRecord(r: RereadRecord, chars = 1500, includeText = true): string {
+  const j = toJsonRecord(r);
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+  const post = !includeText ? (r.text ? "(hidden: include_text false)" : `(${r.status})`) : r.text ? flat(r.text).slice(0, chars) : `(${r.status})`;
+  return [
+    `===== #${r.id} ${r.url}`,
+    `STATUS ${r.status} | THREAD ${r.thread_title ?? "(not found)"} | ${r.community ?? ""}`,
+    `DATE ${r.date ?? "?"} SCORE ${r.score ?? "?"}${j.max_shared_run !== null ? ` SHARED_RUN ${j.max_shared_run} QUOTE_FOUND ${j.quote_found}` : ""}`,
+    ...(r.paraphrase ? [`LINE ${r.paraphrase}`] : []),
+    ...(includeText && r.parent_excerpt ? [`PARENT ${flat(r.parent_excerpt).slice(0, 300)}`] : []),
+    `POST ${post}`,
+  ].join("\n");
+}
+
+export const countStatuses = (recs: { status: RereadStatus }[]) =>
+  recs.reduce<Partial<Record<RereadStatus, number>>>((a, r) => ((a[r.status] = (a[r.status] ?? 0) + 1), a), {});
+
+/**
+ * Body of the MCP tool consensus_reread: re-read the rows, return the printed blocks for the reader (text) and the
+ * serialisable records (structured: status, metadata, overlap, hash; never post text).
+ */
+export async function rereadReport(
+  rows: RereadInput[],
+  opts: { fetchPath?: (path: string) => Promise<FetchResult>; concurrency?: number; chars?: number; includeText?: boolean } = {},
+): Promise<{ text: string; structured: { counts: Partial<Record<RereadStatus, number>>; proxy: RereadStats; records: RereadJson[]; by_id: Record<string, RereadJson> } }> {
+  const stats: RereadStats = { fetches: 0, bytes: 0 };
+  const recs = await rereadPosts(rows, { fetchPath: opts.fetchPath, concurrency: opts.concurrency, stats });
+  const records = recs.map(toJsonRecord);
+  const counts = countStatuses(recs);
+  const summary = `rows ${recs.length} · ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(" · ")} · fetches ${stats.fetches} · bytes ${stats.bytes}`;
+  const text = [...recs.map((r) => formatRecord(r, opts.chars ?? 1500, opts.includeText ?? true)), summary].join("\n\n");
+  return { text, structured: { counts, proxy: stats, records, by_id: indexById(records) } };
+}

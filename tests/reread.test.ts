@@ -1,7 +1,7 @@
 /** Re-read of saved Reddit posts for validation: per-post status, by-id lookup, overlap check, no text on disk. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseRedditRef, rereadPosts, maxSharedRun, quoteFound, toJsonRecord, indexById, parseInput, type FetchResult } from "../src/np/reread.ts";
+import { parseRedditRef, rereadPosts, maxSharedRun, quoteFound, toJsonRecord, indexById, parseInput, formatRecord, rereadReport, type FetchResult } from "../src/np/reread.ts";
 
 const comment = (id: string, body: string, extra: Record<string, unknown> = {}, replies: unknown[] = []) => ({
   kind: "t1",
@@ -106,4 +106,37 @@ test("parseInput reads TSV rows and bare URL lines", () => {
     { id: "701", url: URL("c1"), paraphrase: "A paraphrase" },
     { id: "2", url: URL("c2"), paraphrase: undefined },
   ]);
+});
+
+test("formatRecord prints status, metadata, line, parent and post text truncated to chars", async () => {
+  const fetchPath = async (): Promise<FetchResult> => ({ status: "ok", body: listing({}, [comment("c1", "A body that is long enough to cut")]) });
+  const [r] = await rereadPosts([{ id: "701", url: URL("c1"), paraphrase: "body that is" }], { fetchPath });
+  const out = formatRecord(r!, 10);
+  assert.match(out, /^===== #701 https:/);
+  assert.match(out, /STATUS live \| THREAD Thread title \| r\/MoveToIreland/);
+  assert.match(out, /SHARED_RUN 3 QUOTE_FOUND true/);
+  assert.match(out, /LINE body that is/);
+  assert.match(out, /PARENT Thread title Opening post text here/);
+  assert.match(out, /POST A body tha$/);
+});
+
+test("rereadReport (MCP tool body): text for the reader, structured records without post text, counts", async () => {
+  const fetchPath = async (path: string): Promise<FetchResult> =>
+    path.includes("/comments/gone") ? { status: "not_found" } : { status: "ok", body: listing({}, [comment("c1", "A secret body that stays out of structured output")]) };
+  const rep = await rereadReport(
+    [
+      { id: "1", url: URL("c1"), paraphrase: "secret body" },
+      { id: "2", url: "https://www.reddit.com/r/x/comments/gone/s/c9/" },
+    ],
+    { fetchPath, chars: 1500, includeText: true },
+  );
+  assert.deepEqual(rep.structured.counts, { live: 1, not_found: 1 });
+  assert.equal(rep.structured.records.length, 2);
+  assert.equal(rep.structured.by_id["t1_c1"]!.id, "1");
+  assert.ok(!JSON.stringify(rep.structured).includes("stays out of structured"));
+  assert.match(rep.text, /stays out of structured output/);
+  assert.match(rep.text, /rows 2 · live 1 · not_found 1/);
+  const quiet = await rereadReport([{ id: "1", url: URL("c1") }], { fetchPath, includeText: false });
+  assert.ok(!quiet.text.includes("secret body"));
+  assert.match(quiet.text, /POST \(hidden: include_text false\)/);
 });

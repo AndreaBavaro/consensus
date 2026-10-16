@@ -10,7 +10,7 @@ import { dirname } from "node:path";
 import { fetchThread } from "../src/v3/reddit.ts";
 import { loadRun } from "../src/np/export.ts";
 import type { ExtractRecord } from "../src/np/extract.ts";
-import { indexById, parseInput, rereadPosts, toJsonRecord } from "../src/np/reread.ts";
+import { countStatuses, formatRecord, indexById, parseInput, rereadPosts, toJsonRecord } from "../src/np/reread.ts";
 
 const argv = process.argv.slice(2);
 const args = Object.fromEntries(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("="))) as Record<string, string>;
@@ -21,11 +21,8 @@ if (args.urls) {
   const rows = parseInput(await readFile(args.urls, "utf8"));
   const stats = { fetches: 0, bytes: 0 };
   const recs = await rereadPosts(rows, { stats, concurrency: Number(args.concurrency ?? 4) });
-  for (const r of recs) {
-    const j = toJsonRecord(r);
-    console.log(`\n===== #${r.id} ${r.url}\nSTATUS ${r.status} | THREAD ${r.thread_title ?? "(not found)"} | ${r.community ?? ""}\nDATE ${r.date ?? "?"} SCORE ${r.score ?? "?"}${j.max_shared_run !== null ? ` SHARED_RUN ${j.max_shared_run} QUOTE_FOUND ${j.quote_found}` : ""}${r.paraphrase ? `\nLINE ${r.paraphrase}` : ""}${r.parent_excerpt ? `\nPARENT ${r.parent_excerpt.replace(/\s+/g, " ").slice(0, 300)}` : ""}\nPOST ${r.text ? r.text.replace(/\s+/g, " ").slice(0, Number(args.chars ?? 1500)) : `(${r.status})`}`);
-  }
-  const counts = recs.reduce<Record<string, number>>((a, r) => ((a[r.status] = (a[r.status] ?? 0) + 1), a), {});
+  for (const r of recs) console.log(`\n${formatRecord(r, Number(args.chars ?? 1500))}`);
+  const counts = countStatuses(recs);
   console.error(`rows ${recs.length} ${JSON.stringify(counts)} fetches ${stats.fetches} bytes ${stats.bytes}`);
   if (args.json) {
     const records = recs.map(toJsonRecord);
