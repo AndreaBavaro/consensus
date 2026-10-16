@@ -2,29 +2,32 @@
  * Hand audit of extraction records: re-reads a sample of the coded posts from Reddit (in memory only) and prints each
  * record next to its post text so a person can judge it. Nothing is written to disk.
  *   npx tsx --env-file=.env scripts/np-audit.ts runs/np/pilot.json [--n=50] [--seed=1]
- *   npx tsx --env-file=.env scripts/np-audit.ts --urls=links.txt      (one Reddit post or comment URL per line)
+ *   npx tsx --env-file=.env scripts/np-audit.ts --urls=links.tsv [--json=out.json] [--chars=1500]
+ *     (one URL per line, or id<TAB>url<TAB>paraphrase; prints status + text; --json saves status/overlap/hash, no text)
  */
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { fetchThread } from "../src/v3/reddit.ts";
 import { loadRun } from "../src/np/export.ts";
 import type { ExtractRecord } from "../src/np/extract.ts";
+import { countStatuses, formatRecord, indexById, parseInput, rereadPosts, toJsonRecord } from "../src/np/reread.ts";
 
 const argv = process.argv.slice(2);
 const args = Object.fromEntries(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("="))) as Record<string, string>;
 if (args.urls) {
-  // Validation mode: print each listed post or comment, read in memory only.
-  const urls = (await readFile(args.urls, "utf8")).split("\n").map((l) => l.trim()).filter((l) => l.startsWith("https://"));
-  const cache = new Map<string, Awaited<ReturnType<typeof fetchThread>>>();
-  let i = 0;
-  for (const url of urls) {
-    const m = url.match(/comments\/(\w+)\/[^/]*\/(\w+)?/);
-    const tid = m?.[1];
-    if (!tid) continue;
-    if (!cache.has(tid)) cache.set(tid, await fetchThread(tid, { sinceEpoch: 0, untilEpoch: Number.POSITIVE_INFINITY }));
-    const t = cache.get(tid);
-    const p = m?.[2] ? t?.posts.find((x) => x.id === `t1_${m[2]}`) : t?.posts.find((x) => x.kind === "opener");
-    const date = p?.created_utc ? new Date(p.created_utc * 1000).toISOString().slice(0, 10) : "?";
-    console.log(`\n===== #${++i} ${url}\nTHREAD ${t?.title ?? "(not found)"} | ${t?.community ?? ""}\nDATE ${date} SCORE ${p?.score ?? "?"}\nPOST ${p ? p.text.replace(/\s+/g, " ").slice(0, 1500) : "(deleted or not found)"}`);
+  // Validation mode: re-read each listed post or comment in memory and print it with a machine-readable status.
+  // Input: one URL per line, or TSV `id<TAB>url<TAB>paraphrase`. --json=<out> writes status, metadata, overlap and a
+  // text hash per row (never the text), keyed by row id and fullname.
+  const rows = parseInput(await readFile(args.urls, "utf8"));
+  const stats = { fetches: 0, bytes: 0 };
+  const recs = await rereadPosts(rows, { stats, concurrency: Number(args.concurrency ?? 4) });
+  for (const r of recs) console.log(`\n${formatRecord(r, Number(args.chars ?? 1500))}`);
+  const counts = countStatuses(recs);
+  console.error(`rows ${recs.length} ${JSON.stringify(counts)} fetches ${stats.fetches} bytes ${stats.bytes}`);
+  if (args.json) {
+    const records = recs.map(toJsonRecord);
+    await mkdir(dirname(args.json), { recursive: true });
+    await writeFile(args.json, JSON.stringify({ run_at: new Date().toISOString(), input: args.urls, counts, proxy: { fetches: stats.fetches, bytes: stats.bytes }, records, by_id: indexById(records) }, null, 2));
   }
   process.exit(0);
 }

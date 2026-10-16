@@ -48,6 +48,7 @@ Tools:
 - `consensus_get(id)` replays a saved search from useconsensus.io (the `id=` in a result URL). Free, no keys.
 - `consensus_featured()` lists the polls on the home page with their leading answer and id. Free, no keys.
 - `consensus_search(question, since?, until?, sources?)` runs the full pipeline from `src/v3` on your machine with the keys in `.env`, streams progress, and returns the poll plus what it cost. Each search bills your own LLM, Serper, Oxylabs and X keys (tens of cents); pass `sources: ["reddit"]` without an X key.
+- `consensus_reread(posts, chars?, include_text?)` re-reads up to 100 Reddit permalinks (`{ id, url, line? }`) and returns per-row status, date, score and the longest run of words `line` shares with the post. Post text is printed for the caller and never saved; the structured output holds no text. Needs only the Oxylabs keys. Same function as `scripts/np-audit.ts --urls`.
 
 Run it:
 

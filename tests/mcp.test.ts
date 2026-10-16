@@ -57,6 +57,9 @@ test("built server lists tools within 3 s, with the research inputs on consensus
     assert.ok(ms < 3000, `tools/list took ${ms}ms`);
     const search = r.result.tools.find((t: any) => t.name === "consensus_search");
     for (const k of ["profile", "subs", "deny_subs", "lang", "budget_usd"]) assert.ok(k in search.inputSchema.properties, `missing input ${k}`);
+    const reread = r.result.tools.find((t: any) => t.name === "consensus_reread");
+    assert.ok(reread, "consensus_reread is listed");
+    for (const k of ["posts", "chars", "include_text"]) assert.ok(k in reread.inputSchema.properties, `missing reread input ${k}`);
   } finally {
     s.stop();
   }
@@ -90,6 +93,18 @@ test("consensus_get answers from runs/mcp/<id>.json before trying the remote sit
     assert.match(text, /Canadians who moved to Portugal/);
     assert.match(text, /No regrets — 100%/);
     assert.match(text, /local research run/);
+  } finally {
+    s.stop();
+  }
+});
+
+test("consensus_reread without proxy keys fails fast and names the missing variables (no network)", async () => {
+  const s = startServer();
+  try {
+    await s.init();
+    const r = await s.call("tools/call", { name: "consensus_reread", arguments: { posts: [{ id: "1", url: "https://www.reddit.com/r/x/comments/abc/s/c1/" }] } });
+    assert.equal(r.result.isError, true);
+    assert.match(r.result.content[0].text, /OXYLABS_USERNAME/);
   } finally {
     s.stop();
   }

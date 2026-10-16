@@ -9,6 +9,8 @@
  *   consensus_get       replay a saved search from useconsensus.io by id (free, no keys)
  *   consensus_featured  the polls featured on the useconsensus.io home page (free, no keys)
  *   consensus_search    run the full pipeline (src/v3) here, with the keys in .env; costs the runner per search
+ *   consensus_reread    re-read saved Reddit posts/comments by URL for validation (status, date, score, overlap);
+ *                       needs the Oxylabs keys, no LLM or Serper call; post text is returned to the caller, never saved
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -175,6 +177,46 @@ server.registerTool(
     if (s.id) await saveRun(join(runsDir(), `${s.id}.json`), { query: question, since, until, events }, "links").catch(() => {});
     const note = s.id ? `\n\nSaved id ${s.id} (the link above resolves once this question has also been run on useconsensus.io).` : "";
     return { content: [{ type: "text", text: toMarkdown(s) + note }], structuredContent: s as unknown as Record<string, unknown>, isError: !!s.error && !s.options.length };
+  },
+);
+
+const REREAD_KEYS: Record<string, string> = { "Oxylabs username (Reddit proxy)": "OXYLABS_USERNAME", "Oxylabs password (Reddit proxy)": "OXYLABS_PASSWORD" };
+
+server.registerTool(
+  "consensus_reread",
+  {
+    title: "Re-read saved Reddit posts for validation",
+    description:
+      "Re-read Reddit posts or comments by permalink (e.g. the links in a saved Consensus run) and report, per row: status " +
+      "(live | deleted | removed | not_found | fetch_failed), thread title, community, date, score, and, when a line is given, the longest " +
+      "run of words it shares with the post (verbatim check). The post text is printed for the reader to judge the line against; the " +
+      "structured output never holds post text. Uses the Reddit proxy keys in .env (no LLM or Serper call, a few KB of proxy traffic per post).",
+    inputSchema: {
+      posts: z
+        .array(
+          z.object({
+            id: z.string().trim().min(1).max(64).describe("Row id, e.g. the quote-bank number"),
+            url: z.string().trim().min(1).max(500).describe("Reddit post or comment permalink, or a thread fullname t3_x"),
+            line: z.string().max(2000).optional().describe("The research line or paraphrase to check against the post"),
+          }),
+        )
+        .min(1)
+        .max(100)
+        .describe("Up to 100 rows; each distinct permalink is fetched once"),
+      chars: z.number().int().min(100).max(10000).optional().describe("Characters of post text printed per row, default 1500"),
+      include_text: z.boolean().optional().describe("Print post and parent text for the reader (default true); false prints status and overlap only"),
+    },
+  },
+  async ({ posts, chars, include_text }) => {
+    const missing = Object.entries(REREAD_KEYS).filter(([, k]) => !process.env[k]).map(([what, k]) => `${what}: ${k}`);
+    if (missing.length) return { content: [{ type: "text", text: `consensus_reread needs these environment variables (see .env.example): ${missing.join("; ")}` }], isError: true };
+    // Loaded on first call so the server starts (and lists tools) without loading the Reddit client.
+    const { rereadReport } = await import("../src/np/reread.ts");
+    const rep = await rereadReport(
+      posts.map((p) => ({ id: p.id, url: p.url, ...(p.line ? { paraphrase: p.line } : {}) })),
+      { chars, includeText: include_text ?? true },
+    );
+    return { content: [{ type: "text", text: rep.text }], structuredContent: rep.structured as unknown as Record<string, unknown> };
   },
 );
 
